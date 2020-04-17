@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>mytitle</title>
+        <script src="https://d3js.org/d3.v5.min.js" charset="utf-8"></script>
+
+    </head>
+    <pre id="path_data" hidden>
+        {{ path_data }}
+    </pre>
+    <pre id="annotation_data" hidden>
+        {{ annotation_data }}
+    </pre>
+    <pre id="line_data" hidden>
+        {{ line_data }}
+    </pre>
+
+    <pre id="meta_data"
+         height={{height}}
+         width={{width}}
+         hidden></pre>
+
+    <body>
+        <div id="viz" style="width:{{width}}px;height:{{height}}px;border:black 1px solid;">
+        </div>
+        <script type="text/javascript">
+        const path_dataset = JSON.parse(d3.select('pre#path_data').text());
+        const line_dataset = JSON.parse(d3.select('pre#line_data').text());
+        const annotation_dataset = JSON.parse(d3.select('pre#annotation_data').text());
+        const height = d3.select('pre#meta_data').attr('height')
+        const width = d3.select('pre#meta_data').attr('width')
+
+        var zoom = d3.zoom()
+                    //.center([width / 2, height / 2])
+                    .scaleExtent([1, 50])
+                    .on("zoom", zoomed);
+
+        var svg = d3.select("div#viz").append("svg")
+                    .attr("width", width)
+                    .attr("height", height)
+                  .append("g")
+                    .call(zoom);
+
+        var rect = svg.append("rect")
+                    .attr("width", width)
+                    .attr("height", height)
+                    .style("fill", "white")
+                    .style("pointer-events", "all");
+
+        const g = svg.append("g");
+
+        g.selectAll("line")
+              .data(line_dataset)
+              .join("line")
+              .attr("x1", (d) => d.x1)
+              .attr("y1", (d) => d.y1)
+              .attr("x2", (d) => d.x2)
+              .attr("y2", (d) => d.y2)
+              .attr("stroke", (d) => d.stroke)
+              .attr("stroke-width", (d) => d.stroke_width)
+              .attr("vector-effect", "non-scaling-stroke");
+        
+        /*
+        g.selectAll("circle")
+              .data(circle_dataset)
+              .join("circle")
+              .attr("cx", (d) => d.x)
+              .attr("cy", (d) => d.y)
+              .attr("r", 2);
+        */
+
+        g.selectAll("path")
+                .data(path_dataset)
+                .join("path")
+                .attr("d", (d) => d.str_coords)
+                //.attr("d", d3.line()((d) => d.coords))
+                .attr("stroke", (d) => d.stroke)
+                .attr("stroke-width", (d) => d.stroke_width)
+                .attr("fill", "transparent")
+                .attr("vector-effect", "non-scaling-stroke");
+
+
+        function zoomed() {
+            g.attr("transform", d3.event.transform);
+        }
+        
+    </script>
+
+    </body>
+</html>

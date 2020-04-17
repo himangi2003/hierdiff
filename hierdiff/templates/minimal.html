@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+.axis {
+  fill: none;
+  stroke: #aaa;
+  stroke-width: 1.5px;
+}
+
+</style>
+<body>
+  <div id="viz" style="width:500px;height:500px;border:black 1px solid;">
+  </div>
+<script src="http://d3js.org/d3.v5.min.js"></script>
+<script>
+
+var margin = {top: -5, right: -5, bottom: -5, left: -5},
+    width = 500 - margin.left - margin.right,
+    height = 500 - margin.top - margin.bottom;
+
+var zoom = d3.zoom()
+    //.center([width / 2, height / 2])
+    .scaleExtent([1, 10])
+    .on("zoom", zoomed);
+
+var svg = d3.select("div#viz").append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+  .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.right + ")")
+    .call(zoom);
+
+var rect = svg.append("rect")
+    .attr("width", width)
+    .attr("height", height)
+    .style("fill", "white")
+    .style("pointer-events", "all");
+
+var container = svg.append("g");
+
+container.append("g")
+    .attr("class", "axis")
+  .selectAll("circle")
+    .data(d3.range(10, width, 10))
+  .enter().append("circle")
+    .attr("cx", width / 2)
+    .attr("cy", height / 2)
+    .attr("r", function(d) { return d; })
+    .attr("stroke-width", 1)
+    .attr("vector-effect", "non-scaling-stroke");
+
+var center = svg.append("circle")
+    .style("fill", "red")
+    .attr("cx", width / 2)
+    .attr("cy", height / 2)
+    .attr("r", 10);
+
+var mypath = container.append("path")
+                .attr("d", d3.line()([[50, 50], [100, 50], [110, 60]]))
+                .attr("stroke", "black")
+                .attr("stroke-width", 1)
+                .attr("fill", "transparent");
+
+function zoomed() {
+  //container.attr("transform", "translate(" + d3.event.translate + ")scale(" + d3.event.scale + ")");
+  container.attr("transform", d3.event.transform);
+}
+
+</script>

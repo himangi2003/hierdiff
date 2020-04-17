@@ -7,15 +7,15 @@ For more information, see https://stackoverflow.com/questions/1471994/what-is-se
 from setuptools import setup, find_packages
 PACKAGES = find_packages()
 
-opts = dict(name='ProjectName',
-            maintainer='Name1, Name2, etc',
-            maintainer_email='your_email',
-            description='Add short description',
-            long_description=("""Add an even more detailed description"""),
-            url='your_repo_url_here',
-            license='MIT', # default license, change here and in the git repo if using a different license
-            author='Name1, Name2, etc',
-            author_email='your_email',
+opts = dict(name='hierdiff',
+            maintainer='Andrew Fiore-Gartland',
+            maintainer_email='agartlan@fredhutch.org',
+            description='',
+            long_description=(""""""),
+            url='https://github.com/FredHutch/hierdiff',
+            license='MIT',
+            author='Andrew Fiore-Gartland',
+            author_email='agartlan@fredhutch.org',
             version='0.1',
             packages=PACKAGES
            )
