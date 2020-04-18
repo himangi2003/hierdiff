@@ -2,10 +2,28 @@
 <html lang="en">
     <head>
         <meta charset="utf-8">
-        <title>mytitle</title>
+        <title>{{mytitle}}</title>
         <script src="https://d3js.org/d3.v5.min.js" charset="utf-8"></script>
 
     </head>
+    <style> /* set the CSS */
+        body { font: 24px Arial;}
+
+        div.tooltip { 
+            position: absolute;     
+            text-align: left;     
+            /*width: 80px;          
+            height: 100px;*/
+            overflow: auto;
+            display: block;
+            padding: 2px;       
+            font: 12px Arial;    
+            background: lightgray; 
+            border: 0px;    
+            border-radius: 8px;     
+            pointer-events: none;     
+        }
+    </style>
     <pre id="path_data" hidden>
         {{ path_data }}
     </pre>
@@ -22,6 +40,7 @@
          hidden></pre>
 
     <body>
+        <h>{{mytitle}}</h>
         <div id="viz" style="width:{{width}}px;height:{{height}}px;border:black 1px solid;">
         </div>
         <script type="text/javascript">
@@ -31,16 +50,28 @@
         const height = d3.select('pre#meta_data').attr('height')
         const width = d3.select('pre#meta_data').attr('width')
 
+        // Define the div for the tooltip
+        var div = d3.select("body").append("div") 
+            .attr("class", "tooltip")       
+            .style("opacity", 0);
+
         var zoom = d3.zoom()
                     //.center([width / 2, height / 2])
                     .scaleExtent([1, 50])
                     .on("zoom", zoomed);
 
-        var svg = d3.select("div#viz").append("svg")
+        function zoomed() {
+            // g.attr("transform", d3.event.transform);
+            links.attr("transform",
+                       "translate(" + d3.event.transform.x + "," + d3.event.transform.y + ") scale(" + d3.event.transform.k + ")");
+        }
+
+        const svg = d3.select("div#viz").append("svg")
                     .attr("width", width)
                     .attr("height", height)
-                  .append("g")
-                    .call(zoom);
+                    .append("g").call(zoom);
+        //svg.append("g").call(zoom);
+        //svg.append("tt").call(zoom);
 
         var rect = svg.append("rect")
                     .attr("width", width)
@@ -48,29 +79,9 @@
                     .style("fill", "white")
                     .style("pointer-events", "all");
 
-        const g = svg.append("g");
+        const links = svg.append("g");
 
-        g.selectAll("line")
-              .data(line_dataset)
-              .join("line")
-              .attr("x1", (d) => d.x1)
-              .attr("y1", (d) => d.y1)
-              .attr("x2", (d) => d.x2)
-              .attr("y2", (d) => d.y2)
-              .attr("stroke", (d) => d.stroke)
-              .attr("stroke-width", (d) => d.stroke_width)
-              .attr("vector-effect", "non-scaling-stroke");
-        
-        /*
-        g.selectAll("circle")
-              .data(circle_dataset)
-              .join("circle")
-              .attr("cx", (d) => d.x)
-              .attr("cy", (d) => d.y)
-              .attr("r", 2);
-        */
-
-        g.selectAll("path")
+        links.selectAll("path")
                 .data(path_dataset)
                 .join("path")
                 .attr("d", (d) => d.str_coords)
@@ -80,10 +91,43 @@
                 .attr("fill", "transparent")
                 .attr("vector-effect", "non-scaling-stroke");
 
-
-        function zoomed() {
-            g.attr("transform", d3.event.transform);
-        }
+        const tt = svg.append("g");
+        
+        //Add the lines showing proportions
+        links.selectAll("nodes")
+              .data(line_dataset)
+              .join("line")
+              .attr("x1", (d) => d.x1)
+              .attr("y1", (d) => d.y1)
+              .attr("x2", (d) => d.x2)
+              .attr("y2", (d) => d.y2)
+              .attr("stroke", (d) => d.stroke)
+              .attr("stroke-width", (d) => d.stroke_width)
+              .attr("vector-effect", "non-scaling-stroke");
+        //Add the tooltip
+        tt.selectAll("line")
+              .data(annotation_dataset)
+              .join("line")
+              .attr("x1", (d) => d.x1)
+              .attr("y1", (d) => d.y1)
+              .attr("x2", (d) => d.x2)
+              .attr("y2", (d) => d.y2)
+              .attr("stroke", 'transparent')
+              .attr("stroke-width", 8)
+              .attr("vector-effect", "non-scaling-stroke")
+              .on("mouseover", function(d) {    
+                    div.transition()    
+                        .duration(200)    
+                        .style("opacity", 0.9);    
+                    div.html(d.annotation.join("<br/>"))  
+                        .style("left", (d3.event.pageX) + "px")   
+                        .style("top", (d3.event.pageY - 28) + "px");  
+                    })          
+                .on("mouseout", function(d) {   
+                    div.transition()    
+                        .duration(500)    
+                        .style("opacity", 0); 
+                });
         
     </script>
 

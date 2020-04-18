@@ -9,30 +9,84 @@ from scipy.spatial import distance
 import scipy.cluster.hierarchy as sch
 
 import json
+
+"""jinja2 import triggers DeprecationWarning about imp module"""
 from jinja2 import Environment, PackageLoader#, FileSystemLoader
 
-__all__ = ['plot_hclust']
+__all__ = ['plot_hclust',
+           'plot_hclust_props']
 
 """TODO:
  - Add tooltips
  - Add ability to export/dowload SVG
+   https://github.com/edeno/d3-save-svg
  - Add simplified entry points
  - SVG should resize to window and tree should scale, dynamically
+ - Control x and y zoom independently
+   https://stackoverflow.com/questions/61071276/d3-synchronizing-2-separate-zoom-behaviors/61164185#61164185
  """
+set1_colors = ["#e41a1c", "#377eb8", "#4daf4a",
+               "#984ea3", "#ff7f00", "#ffff33",
+               "#a65628", "#f781bf", "#999999"]
 
-def plot_hclust(Z, height=600, width=900):
-    paths, lines, annotations = _hclust_paths(Z, height, width)
+set3_colors = ["#8dd3c7", "#ffffb3", "#bebada", "#fb8072",
+               "#80b1d3", "#fdb462", "#b3de69", "#fccde5",
+               "#d9d9d9", "#bc80bd", "#ccebc5", "#ffed6f"]
+
+
+def plot_hclust(Z, height=600, width=900, title=''):
+    """Plot tree of linkage-based hierarchical clustering. Nodes
+    annotated with cluster ID.
+
+    Parameters
+    ----------
+    Z : linkage matrix
+        Result of calling sch.linkage on a compressed pair-wise distance matrix
+
+    Returns
+    -------
+    html : str
+        String that can be saved as HTML for viewing"""
+    html = plot_hclust_props(Z, height=height, width=width, title=title)
+    return html
+
+def plot_hclust_props(Z, height=600, width=900, title='', res=None, alpha_col='pvalue', alpha=0.05, colors=None):
+    """Plot tree of linkage-based hierarchical clustering, with nodes colored using stacked bars
+    representing proportion of cluster members associated with specific conditions. Nodes also optionally
+    annotated with pvalue, number of members or cluster ID.
+
+    Parameters
+    ----------
+    Z : linkage matrix
+        Result of calling sch.linkage on a compressed pair-wise distance matrix
+    res : pd.DataFrame
+        Result from calling hcluster_diff, with observed/frequencies and p-values for each node
+    alpha_col : str
+        Column in res to use for 'alpha' annotation
+    alpha : float
+        Threshold for plotting the stacked bars and annotation
+    colors : tuple of valid colors
+        Used for stacked bars of conditions at each node
+    labels : list of condition labels
+        Matched to tuples of colors and frequencies in res
+
+    Returns
+    -------
+    html : str
+        String that can be saved as HTML for viewing"""
+
+    paths, lines, annotations = _hclust_paths(Z, height, width, res=res, alpha_col=alpha_col, alpha=alpha, colors=colors)
 
     #lines_df = 100 * pd.DataFrame({'x1':np.random.rand(10), 'y1':np.random.rand(10), 'x2':np.random.rand(10), 'y2':np.random.rand(10)})
     #lines_df = lines_df.assign(stroke='red', stroke_width=1.5)
     #lines_json = lines_df.to_json(orient='records')
-
     #circle_data = pd.DataFrame({'x':np.random.rand(10)*50 + width/2, 'y':np.random.rand(10)*50 + height/2}).to_json(orient='records')
+    
     jinja_env = Environment(loader=PackageLoader('hierdiff', 'templates'))
     #jinja_env = Environment(loader=FileSystemLoader(opj(_git, 'hierdiff', 'hierdiff')))
 
     tree_tmp = jinja_env.get_template('tree_template.html')
-    html = tree_tmp.render(mytitle='hclust_diff',
+    html = tree_tmp.render(mytitle=title,
                              line_data=json.dumps(lines),
                              annotation_data=json.dumps(annotations),
                              path_data=json.dumps(paths),
@@ -40,10 +94,18 @@ def plot_hclust(Z, height=600, width=900):
                              width=width)
     return html
 
-def _hclust_paths(Z, height, width, res=None, tip_cols=[], ann='N', margin=10):
+def _hclust_paths(Z, height, width, margin=10, res=None, alpha_col='pvalue', alpha=0.05, colors=None, min_count=0):
+    if colors is None:
+        colors = set1_colors
     lines = []
     annotations = []
     paths = []
+
+    if not res is None:
+        x_val_cols = [c for c in res.columns if 'x_val_' in c]
+        x_freq_cols = [c for c in res.columns if 'x_freq_' in c]
+        x_vals = [res[c].iloc[0] for c in x_val_cols]
+    
 
     dend = sch.dendrogram(Z, no_plot=True,
                              color_threshold=None,
@@ -59,15 +121,15 @@ def _hclust_paths(Z, height, width, res=None, tip_cols=[], ann='N', margin=10):
     for xx, yy, hex_cid in zip(dend['icoord'], dend['dcoord'], dend['color_list']):
         paths.append(dict(coords=[[xscale(x), yscale(y)] for x,y in zip(xx, yy)], stroke='black', stroke_width=1))
         #axh.plot(xx, yy, zorder=1, lw=0.5, color='k', alpha=1)
-
-        if res is None:
-            lines.append(dict(x1=xscale(xx[1]), x2=xscale(xx[2]), y1=yscale(yy[1]), y2=yscale(yy[2]), stroke='transparent', stroke_width=4))
-        else:
-            cid = int(hex_cid, 16)
+        cid = int(hex_cid, 16)
+        if not res is None:
             cid_res = res.loc[res['cid'] == cid].iloc[0]
-
             
             N = np.sum(cid_res['K_neighbors'])
+            ann = ['cid: %d' % cid,
+                   'n: %1.0f' % N,
+                   '%s: %1.3f' % (alpha_col, cid_res[alpha_col])]
+            annotations.append(dict(annotation=ann, x1=xscale(xx[1]), x2=xscale(xx[2]), y1=yscale(yy[1]), y2=yscale(yy[2])))
             if alpha is None or cid_res[alpha_col] <= alpha and N > min_count:
                 obs = np.asarray(cid_res[x_freq_cols])
                 obs = obs / np.sum(obs)
@@ -88,25 +150,10 @@ def _hclust_paths(Z, height, width, res=None, tip_cols=[], ann='N', margin=10):
                              lw=10,
                              solid_capstyle='butt')"""
                     curX += L*obs[i]
-                if ann == 'N':
-                    s = '%1.0f' % N
-                elif ann == 'CID':
-                    s = cid
-                elif ann == 'alpha':
-                    if cid_res[alpha_col] < 0.001:
-                        s = '< 0.001'
-                    else:
-                        s = '%1.3f' % cid_res[alpha_col]
-                if not ann == '':# and annotateCount < annC:
-                    xy = (xx[1] + L/2, yy[1])
-                    # print(s,np.round(xy[0]), np.round(xy[1]))
-                    annotateCount += 1
-                    annotations.append(dict(s=s, x=xscale(xy[0]), y=yscale(xy[1])))
-                    """axh.annotate(s,
-                                 xy=xy,
-                                 size='x-small',
-                                 horizontalalignment='center',
-                                 verticalalignment='center')"""
+                
+        else:
+            s = ['cid: %d' % cid]
+            annotations.append(dict(annotation=s, x1=xscale(xx[1]), x2=xscale(xx[2]), y1=yscale(yy[1]), y2=yscale(yy[2])))
         paths = _translate_paths(paths)
     return paths, lines, annotations
 
@@ -131,7 +178,7 @@ def _translate_paths(paths):
         paths[j]['str_coords'] = tmp
     return paths
 
-def plot_hclust_props(figh, Z, res, alpha_col='pvalue', alpha=0.05, colors=None, ann='N', xLim=None, maxY=None, min_count=20):
+def _plot_hclust_props(figh, Z, res, alpha_col='pvalue', alpha=0.05, colors=None, ann='N', xLim=None, maxY=None, min_count=20):
     """Plot tree of linkage-based hierarchical clustering, with nodes colored with stacked bars
     representing proportion of cluster members associated with specific conditions. Nodes also optionally
     annotated with pvalue, number of members or cluster ID.
