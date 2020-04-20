@@ -19,7 +19,7 @@ class TestHierDiff(unittest.TestCase):
         np.random.seed(110820)
         pwmat = distance.pdist(np.random.rand(100, 4))
         Z = sch.linkage(pwmat, method='complete')
-        html = plot_hclust(Z, height=600, width=900, title='test_d3_plot')
+        html = plot_hclust(Z, title='test_d3_plot')
 
         with open(opj('hierdiff', 'tests', 'test.html'), 'w', encoding='utf-8') as fh:
             fh.write(html)
@@ -42,9 +42,7 @@ class TestHierDiff(unittest.TestCase):
                                     method='complete')
         print(res.loc[res['pvalue'] < 0.5].head())
 
-        html = plot_hclust_props(Z, height=600,
-                                    width=900,
-                                    title='test_d3_plot_props',
+        html = plot_hclust_props(Z, title='test_d3_plot_props',
                                     res=res,
                                     alpha=0.5,
                                     alpha_col='pvalue')

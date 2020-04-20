@@ -29,7 +29,7 @@ set3_colors = ["#8dd3c7", "#ffffb3", "#bebada", "#fb8072",
                "#d9d9d9", "#bc80bd", "#ccebc5", "#ffed6f"]
 
 
-def plot_hclust(Z, height=600, width=900, title=''):
+def plot_hclust(Z, title=''):
     """Plot tree of linkage-based hierarchical clustering. Nodes
     annotated with cluster ID.
 
@@ -42,10 +42,10 @@ def plot_hclust(Z, height=600, width=900, title=''):
     -------
     html : str
         String that can be saved as HTML for viewing"""
-    html = plot_hclust_props(Z, height=height, width=width, title=title)
+    html = plot_hclust_props(Z, title=title)
     return html
 
-def plot_hclust_props(Z, height=600, width=900, title='', res=None, alpha_col='pvalue', alpha=0.05, tooltip_cols=[], colors=None):
+def plot_hclust_props(Z, title='', res=None, alpha_col='pvalue', alpha=0.05, tooltip_cols=[], colors=None):
     """Plot tree of linkage-based hierarchical clustering, with nodes colored using stacked bars
     representing proportion of cluster members associated with specific conditions. Nodes also optionally
     annotated with pvalue, number of members or cluster ID.
@@ -69,8 +69,9 @@ def plot_hclust_props(Z, height=600, width=900, title='', res=None, alpha_col='p
     -------
     html : str
         String that can be saved as HTML for viewing"""
-
-    paths, lines, annotations, legend_data = _hclust_paths(Z, height, width,
+    height=600
+    width=900
+    paths, lines, annotations, legend_data = _hclust_paths(Z, height=height, width=width,
                                                             res=res,
                                                             alpha_col=alpha_col,
                                                             alpha=alpha,
