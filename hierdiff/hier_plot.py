@@ -17,6 +17,7 @@ __all__ = ['plot_hclust',
            'plot_hclust_props']
 
 """TODO:
+ - Test only a subset of the rows that have been clustered
  - Control x and y zoom independently
    https://stackoverflow.com/questions/61071276/d3-synchronizing-2-separate-zoom-behaviors/61164185#61164185
  """
@@ -130,8 +131,7 @@ def _hclust_paths(Z, height, width, margin=10, res=None, alpha_col='pvalue', alp
             
             N = np.sum(cid_res['K_neighbors'])
             ann = ['cid: %d' % cid,
-                   'n: %1.0f' % N,
-                   '%s: %1.3f' % (alpha_col, cid_res[alpha_col])]
+                   'n: %1.0f' % N]
             ann.extend(['%s: %s' % (tt, cid_res[tt]) for tt in tooltip_cols])
             annotations.append(dict(annotation=ann, x1=xscale(xx[1]), x2=xscale(xx[2]), y1=yscale(yy[1]), y2=yscale(yy[2])))
             if alpha is None or cid_res[alpha_col] <= alpha and N > min_count:
