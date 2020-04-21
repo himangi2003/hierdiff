@@ -19,6 +19,8 @@ __all__ = ['plot_hclust',
 """TODO:
  - Control x and y zoom independently
    https://stackoverflow.com/questions/61071276/d3-synchronizing-2-separate-zoom-behaviors/61164185#61164185
+ - Include option for pruning.
+ - Modify so that plots work with test_within results (or specify that plots should be made using a groupby on those columns)
  """
 set1_colors = ["#e41a1c", "#377eb8", "#4daf4a",
                "#984ea3", "#ff7f00", "#ffff33",

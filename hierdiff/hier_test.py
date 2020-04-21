@@ -386,17 +386,17 @@ def neighborhood_diff(clone_df, pwmat, x_cols, count_col='count', test='chi2', k
                                   c.replace('pvalue', 'FDRq'):adjustnonnan(res_df[c].values, method='fdr_bh')})
     return res_df
 
-def hcluster_diff(clone_df, pwmat, x_cols, count_col='count', test='chi2', min_n=20, method='complete', **kwargs):
+def hcluster_diff(clone_df, pwmat, x_cols, count_col='count', test_within=[], test='chi2', min_n=20, method='complete', **kwargs):
     """Tests for association of categorical variables in x_cols with each cluster/node
     in a hierarchical clustering of clones with distances in pwmat.
 
-    Use Fisher's exact test (test='fishers') to detect enrichment/association of the neighborhood
+    Use Fisher's exact test (test='fishers') to detect enrichment/association of the neighborhood/cluster
     with one variable.
 
     Tests the 2 x 2 table for each clone:
 
     +----+----+-------+--------+
-    |         |  Neighborhood  |
+    |         |    Cluster     |
     |         +-------+--------+
     |         | Y     |    N   |
     +----+----+-------+--------+
@@ -426,6 +426,9 @@ def hcluster_diff(clone_df, pwmat, x_cols, count_col='count', test='chi2', min_n
     count_col : str
         Column in clone_df that specifies counts.
         Default none assumes count of 1 cell for each row.
+    test_within : list of columns
+        Provides option to test within groups using a pd.DataFrame.GroupBy. Allows for one clustering
+        of pooled TCRs, but testing within groups (e.g. participants or conditions)
     test : str
         Specifies Fisher's exact test ("fishers"), Chi-squared ("chi2") or
         logistic regression ("glm") for testing the association.
@@ -459,6 +462,13 @@ def hcluster_diff(clone_df, pwmat, x_cols, count_col='count', test='chi2', min_n
     compressedDmat = distance.squareform(pwmat)
     Z = sch.linkage(compressedDmat, method=method)
 
+    if len(test_within) == 0:
+        """When a Series of ones is passed to Groupby, one group with all rows will be analyzed"""
+        test_within = pd.Series(np.ones(clone_df.shape[0]), index=clone_df.index)
+        no_groups = True
+    else:
+        no_groups = False
+
     clusters = {}
     for i, merge in enumerate(Z):
         cid = 1 + i + Z.shape[0]
@@ -475,49 +485,64 @@ def hcluster_diff(clone_df, pwmat, x_cols, count_col='count', test='chi2', min_n
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         res = []
-        for cid, m in members.items():
-            not_m = [i for i in range(n) if not i in m]
-            y = np.zeros(n)
-            y[m] = 1
-
-            K = np.sum(y)
-            R = np.max(pwmat[m, :][:, m])
-
-            cdf = clone_df.assign(**{ycol:y})[[ycol, count_col] + x_cols]
-            counts = _prep_counts(cdf, x_cols, ycol, count_col)
-
-            out = {'CTS%d' % i:v for i,v in enumerate(counts.values.ravel())}
-
-            uY = [1, 0]
-            out.update({'x_col_%d' % i:v for i,v in enumerate(x_cols)})
-            for i,xvals in enumerate(counts.index.tolist()):
-                if type(xvals) is tuple:
-                    val = '|'.join(xvals)
-                else:
-                    val = xvals
-                out.update({'x_val_%d' % i:val,
-                            'x_freq_%d' % i: counts.loc[xvals, 1] / counts.loc[xvals].sum()})
-
-            out.update({'cid':cid,
-                        'members_index':list(clone_df.index[m]),
-                        'members_i':m,
-                        'K_neighbors':K,
-                        'R_radius':R})
-
-            if K >= min_n and K < (n-min_n):
-                if test == 'logistic':
-                    glm_res = _glmCatNBR(cdf, x_cols, y_col=ycol, count_col=count_col, **kwargs)
-                    out.update(glm_res)
-                elif test == 'chi2+fishers':
-                    comb_res = _chi2_fishersNBR(counts)
-                    out.update(comb_res)
-                elif test == 'chm':
-                    comb_res = _CMH_NBR(counts)
-                    out.update(comb_res)
-                out.update({'tested':True})
+        for ind, gby in clone_df.groupby(test_within):
+            """Use groupby to generate indices, but continue to analyze whole clone_df
+            setting non-group counts to zero"""
+            if not no_groups:
+                gby_info = {k:v for k,v in zip(test_within, ind)}
             else:
-                out.update({'tested':False})
-            res.append(out)
+                gby_info = {}
+            clone_tmp = clone_df.copy()
+            """Set counts to zero for all clones that are not in the group being tested"""
+            clone_tmp.loc[~gby.index, count_col] = 0
+            for cid, m in members.items():
+                not_m = [i for i in range(n) if not i in m]
+                y = np.zeros(n)
+                y[m] = 1
+
+                K = np.sum(y)
+                R = np.max(pwmat[m, :][:, m])
+
+                cdf = clone_tmp.assign(**{ycol:y})[[ycol, count_col] + x_cols]
+                counts = _prep_counts(cdf, x_cols, ycol, count_col)
+
+                out = {'CTS%d' % i:v for i,v in enumerate(counts.values.ravel())}
+
+                uY = [1, 0]
+                out.update({'x_col_%d' % i:v for i,v in enumerate(x_cols)})
+                for i,xvals in enumerate(counts.index.tolist()):
+                    if type(xvals) is tuple:
+                        val = '|'.join(xvals)
+                    else:
+                        val = xvals
+                    out.update({'x_val_%d' % i:val,
+                                'x_freq_%d' % i: counts.loc[xvals, 1] / counts.loc[xvals].sum()})
+                
+                out.update({'cid':cid,
+                            'members_index':list(clone_tmp.index[m]),
+                            'members_i':m,
+                            'K_neighbors':K,
+                            'R_radius':R})
+                if not no_groups:
+                    m_within = [mi for mi in m if clone_tmp[count_col].iloc[mi] > 0]
+                    out.update({'members_within_index':list(clone_tmp.index[m_within]),
+                                'members_within_i':m_within})
+
+                if K >= min_n and K < (n-min_n):
+                    if test == 'logistic':
+                        glm_res = _glmCatNBR(cdf, x_cols, y_col=ycol, count_col=count_col, **kwargs)
+                        out.update(glm_res)
+                    elif test == 'chi2+fishers':
+                        comb_res = _chi2_fishersNBR(counts)
+                        out.update(comb_res)
+                    elif test == 'chm':
+                        comb_res = _CMH_NBR(counts)
+                        out.update(comb_res)
+                    out.update({'tested':True})
+                else:
+                    out.update({'tested':False})
+                out.update(gby_info)
+                res.append(out)
 
         res_df = pd.DataFrame(res)
         if test in ['fishers', 'chi2']:
