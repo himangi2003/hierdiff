@@ -72,7 +72,14 @@ def _chi2NBR(res_df, count_cols):
             'pvalue':np.nan * np.zeros(res_df.shape[0])}
     for i in range(res_df.shape[0]):
         tab = res_df[count_cols].iloc[i].values.reshape((len(count_cols) // 2, 2))
-        res['chisq'][i], res['pvalue'][i], dof, expected = chi2_contingency(tab)
+        """Squeeze out rows where there were no instances inside or outside the cluster
+        (happens with test_within)"""
+        both_zero_ind = np.all(tab==0, axis=1)
+        tab = tab[~both_zero_ind, :]
+        try:
+            res['chisq'][i], res['pvalue'][i], dof, expected = chi2_contingency(tab)
+        except ValueError:
+            res['chisq'][i], res['pvalue'][i] = np.nan, np.nan
     return res
 
 def _CMH_NBR(counts, continuity_correction=True):
@@ -480,7 +487,15 @@ def hcluster_diff(clone_df, pwmat, x_cols, count_col='count', test_within=[], te
         else:
             return _get_indices(clusters, clusters[i][0]) + _get_indices(clusters, clusters[i][1])
 
+    def _get_cluster_indices(clusters, i):
+        if i <= Z.shape[0]:
+            return []
+        else:
+            return [int(i)] + _get_cluster_indices(clusters, clusters[i][0]) + _get_cluster_indices(clusters, clusters[i][1])
+
     members = {i:_get_indices(clusters, i) for i in range(Z.shape[0] + 1, max(clusters.keys()) + 1)}
+    """Note that the list of clusters within each cluster includes the current cluster"""
+    cluster_members = {i:_get_cluster_indices(clusters, i) for i in range(Z.shape[0] + 1, max(clusters.keys()) + 1)}
 
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
@@ -489,12 +504,17 @@ def hcluster_diff(clone_df, pwmat, x_cols, count_col='count', test_within=[], te
             """Use groupby to generate indices, but continue to analyze whole clone_df
             setting non-group counts to zero"""
             if not no_groups:
-                gby_info = {k:v for k,v in zip(test_within, ind)}
+                if len(test_within) == 1:
+                    """Workaround since groupby returns ind as a value if only one groupby level is provided"""
+                    gby_info = {test_within[0]: ind}    
+                else:
+                    gby_info = {k:v for k,v in zip(test_within, ind)}
             else:
                 gby_info = {}
             clone_tmp = clone_df.copy()
             """Set counts to zero for all clones that are not in the group being tested"""
-            clone_tmp.loc[~gby.index, count_col] = 0
+            not_gby = [ii for ii in clone_df.index if not ii in gby.index]
+            clone_tmp.loc[not_gby, count_col] = 0
             for cid, m in members.items():
                 not_m = [i for i in range(n) if not i in m]
                 y = np.zeros(n)
@@ -521,6 +541,7 @@ def hcluster_diff(clone_df, pwmat, x_cols, count_col='count', test_within=[], te
                 out.update({'cid':cid,
                             'members_index':list(clone_tmp.index[m]),
                             'members_i':m,
+                            'cid_members':cluster_members[cid],
                             'K_neighbors':K,
                             'R_radius':R})
                 if not no_groups:

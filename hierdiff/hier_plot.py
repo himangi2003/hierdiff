@@ -48,7 +48,7 @@ def plot_hclust(Z, title=''):
     html = plot_hclust_props(Z, title=title)
     return html
 
-def plot_hclust_props(Z, title='', res=None, alpha_col='pvalue', alpha=0.05, tooltip_cols=[], colors=None):
+def plot_hclust_props(Z, title='', res=None, alpha_col='pvalue', alpha=0.05, tooltip_cols=[], colors=None, prune_col=None):
     """Plot tree of linkage-based hierarchical clustering, with nodes colored using stacked bars
     representing proportion of cluster members associated with specific conditions. Nodes also optionally
     annotated with pvalue, number of members or cluster ID.
@@ -65,8 +65,9 @@ def plot_hclust_props(Z, title='', res=None, alpha_col='pvalue', alpha=0.05, too
         Threshold for plotting the stacked bars and annotation
     colors : tuple of valid colors
         Used for stacked bars of conditions at each node
-    labels : list of condition labels
-        Matched to tuples of colors and frequencies in res
+    prune_col : str/column in res
+        Column of res that indicates whether a result/node can be pruned from the tree.
+        The tree will not print any pruned nodes that only contain other pruned nodes.
 
     Returns
     -------
@@ -79,7 +80,8 @@ def plot_hclust_props(Z, title='', res=None, alpha_col='pvalue', alpha=0.05, too
                                                             alpha_col=alpha_col,
                                                             alpha=alpha,
                                                             tooltip_cols=tooltip_cols,
-                                                            colors=colors)
+                                                            colors=colors,
+                                                            prune_col=prune_col)
 
     #lines_df = 100 * pd.DataFrame({'x1':np.random.rand(10), 'y1':np.random.rand(10), 'x2':np.random.rand(10), 'y2':np.random.rand(10)})
     #lines_df = lines_df.assign(stroke='red', stroke_width=1.5)
@@ -99,7 +101,7 @@ def plot_hclust_props(Z, title='', res=None, alpha_col='pvalue', alpha=0.05, too
                              width=width)
     return html
 
-def _hclust_paths(Z, height, width, margin=10, res=None, alpha_col='pvalue', alpha=0.05, tooltip_cols=[], colors=None, min_count=0):
+def _hclust_paths(Z, height, width, margin=10, res=None, alpha_col='pvalue', alpha=0.05, tooltip_cols=[], colors=None, min_count=0, prune_col=None):
     if colors is None:
         colors = set1_colors
     lines = []
@@ -125,11 +127,23 @@ def _hclust_paths(Z, height, width, margin=10, res=None, alpha_col='pvalue', alp
                                   (height-margin, 0+margin))
 
     for xx, yy, hex_cid in zip(dend['icoord'], dend['dcoord'], dend['color_list']):
-        paths.append(dict(coords=[[xscale(x), yscale(y)] for x,y in zip(xx, yy)], stroke='black', stroke_width=1))
         #axh.plot(xx, yy, zorder=1, lw=0.5, color='k', alpha=1)
         cid = int(hex_cid, 16)
         if not res is None:
-            cid_res = res.loc[res['cid'] == cid].iloc[0]
+            """Assumes there is only one matching cid (not true if multiple results are passed)"""
+            cid_res = res.loc[res['cid'] == cid]
+            if len(cid_res) > 1:
+                print('Multiple matching results for each cluster id (i.e. cid)')
+                return
+            else:
+                cid_res = cid_res.iloc[0]
+            
+            if not prune_col is None:
+                """Prune (don't print) if all member results are also prune=True"""
+                prune = res.loc[res['cid'].isin(cid_res['cid_members']), prune_col].all()
+                if prune:
+                    continue
+            paths.append(dict(coords=[[xscale(x), yscale(y)] for x,y in zip(xx, yy)], stroke='black', stroke_width=1))
             
             N = np.sum(cid_res['K_neighbors'])
             ann = ['cid: %d' % cid,
@@ -156,8 +170,8 @@ def _hclust_paths(Z, height, width, margin=10, res=None, alpha_col='pvalue', alp
                              lw=10,
                              solid_capstyle='butt')"""
                     curX += L*obs[i]
-                
         else:
+            paths.append(dict(coords=[[xscale(x), yscale(y)] for x,y in zip(xx, yy)], stroke='black', stroke_width=1))
             s = ['cid: %d' % cid]
             annotations.append(dict(annotation=s, x1=xscale(xx[1]), x2=xscale(xx[2]), y1=yscale(yy[1]), y2=yscale(yy[2])))
         paths = _translate_paths(paths)
