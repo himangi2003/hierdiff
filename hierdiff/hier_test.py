@@ -22,21 +22,14 @@ __all__ = ['hcluster_diff',
 
 
 """TODO:
- * Parallelize permutation test to compute p-values for
-    L2-penalized logistic regression"""
-'''
-import parmap
-import multiprocessing
-pool = multiprocessing.Pool(processes=2)
-
-def _rand_glm(n, cdf, nparams, glmParams):
-    rparams = np.zeros((len(nparams), n))
-    for sampi in range(n):
-        randy = cdf['NBR'].sample(frac=1, replace=False).values
-        rres = sm.GLM(endog=randy, **glmParams).fit_regularized(L1_wt=0, alpha=0)
-        rparams[:, sampi] = rres.params
-    return rparams
-out = parmap.map(_rand_glm, range(nperms), cdf=cdf, nparams=2, glmParams=glmParams, pm_pool=pool, pm_chunksize=nperms // (2+1))'''
+ * Add useful marginal frequencies to NNdiff output (like hierdiff)
+ * Make sure RR and OR make sense. Maybe include only one for fisher test?
+ * Separate function that creates the count matrix for either NN or hier (or another) clustering
+ * Functions for cluster introspection are TCR specific and should be included, while the basic
+   stats could be largely excluded (included by example)
+ * Output should allow for easy testing with existing methods in statsmodels or otherwise,
+   that can be easily demonstrated?
+ * Plot function should take the counts output providing introspection with or without pvalues/testing"""
 
 def _prep_counts(cdf, xcols, ycol='NBR', count_col=None):
     if count_col is None:
