@@ -1,5 +1,5 @@
 """
-python -m unittest hierdiff/tests/test_plot.py
+python -m pytest hierdiff/tests/test_plot.py
 """
 import sys
 import unittest
@@ -11,7 +11,7 @@ from os.path import join as opj
 from scipy.spatial import distance
 import scipy.cluster.hierarchy as sch
 
-from hierdiff import plot_hclust, hcluster_diff, plot_hclust_props
+from hierdiff import plot_hclust, hcluster_tally, plot_hclust_props
 
 class TestHierDiff(unittest.TestCase):
     
@@ -34,18 +34,14 @@ class TestHierDiff(unittest.TestCase):
 
         data = pd.DataFrame({'count':np.random.randint(low=1, high=20, size=n),
                              'condition':np.random.choice(['Positive', 'Negative'], size=n)})
-        res, Z = hcluster_diff(data, distance.squareform(pwmat, force='matrix'),
+        res, Z = hcluster_tally(data, distance.squareform(pwmat, force='matrix'),
                                     x_cols=['condition'],
                                     count_col='count',
-                                    test='fishers',
-                                    min_n=10,
                                     method='complete')
-        print(res.loc[res['pvalue'] < 0.5].head())
+        # print(res.loc[res['pvalue'] < 0.5].head())
 
         html = plot_hclust_props(Z, title='test_d3_plot_props',
-                                    res=res,
-                                    alpha=0.5,
-                                    alpha_col='pvalue')
+                                    res=res, alpha=None)# , alpha=0.5, alpha_col='count')
 
         with open(opj('hierdiff', 'tests', 'test_props.html'), 'w', encoding='utf-8') as fh:
             fh.write(html)
