@@ -12,18 +12,9 @@ __all__ = ['hcluster_tally',
 		   'neighborhood_tally']
 
 """TODO:
-
-Rerun tests
-Write association test function
-Write a general function that accepts cluster labels? Should be easy enough
-
- * Add useful marginal frequencies to NNdiff output (like hierdiff)
- * Make sure RR and OR make sense. Maybe include only one for fisher test?
- * Separate function that creates the count matrix for either NN or hier (or another) clustering
+ * Write a general function that accepts cluster labels? Should be easy enough
  * Functions for cluster introspection are TCR specific and should be included, while the basic
    stats could be largely excluded (included by example)
- * Output should allow for easy testing with existing methods in statsmodels or otherwise,
-   that can be easily demonstrated?
  * Plot function should take the counts output providing introspection with or without pvalues/testing"""
 
 def _counts_to_cols(counts):
@@ -43,14 +34,16 @@ def _counts_to_cols(counts):
     j = 0
     cols = tuple(counts.index.names)
     levels = []
-    for lev in counts.index.levels:
+    for name, lev in zip(counts.index.names, counts.index.levels):
         if len(lev) == 1:
-            if not 0 in lev:
-                """This solves the problem of when a variable with one level is included
+            """This solves the problem of when a variable with one level is included
                 by accident or e.g. all instances are cmember = 1 (top node, big R)"""
-                levels.append((0, lev[0]))
+            if name == 'cmember':
+                levels.append(('MEM+', 'MEM-'))    
+            elif not 0 in lev:
+                levels.append(tuple(sorted((0, lev[0]))))
             else:
-                levels.append(('REF', lev[0]))
+                levels.append(tuple(sorted(('REF', lev[0]))))
         else:
             levels.append(tuple(lev))
     levels = tuple(levels)
@@ -82,16 +75,16 @@ def _prep_counts(cdf, xcols, ycol, count_col=None):
     """Returns a dict with keys that can be added to a result row to store tallies
 
     For a 2x2 table the data is encoded as follows
-    X+Y+ encodes the second level in Y (cluster membership = 1) and X
+    X+MEM+ encodes the first level in Y (cluster membership = MEM+) and X
     and out contains columns named val_j and ct_j where j is ravel order, such that
     the values of a 2x2 table (a, b, c, d) are:
-        ct_0    X+Y+    a    First level of X and a cluster member
-        ct_1    X+Y-    b    First level of X and a non-member
-        ct_2    X-Y+    c    Second level of X and a cluster member
-        ct_3    X-Y-    d    Second level of X and a non-member\
+        ct_0    X-MEM+    a    First level of X and a cluster member ("M+" which sorts before "M-" so is also first level)
+        ct_1    X-MEM-    b    First level of X and a non member
+        ct_2    X+MEM+    c    Second level of X and a cluster member
+        ct_3    X+MEM-    d    Second level of X and a non member
 
-    val_j also encodes explictly the values of the X levels and cluster membership indicator (1 = member)
-    This means that an OR > 1 is enrichment of the first level of X in the cluster.
+    val_j also encodes explictly the values of the X levels and cluster membership indicator (MEM+ = member)
+    This means that an OR > 1 is enrichment of the SECOND level of X in the cluster.
 
     Longer tables are stored in ravel order with ct_j/val_j pairs with val_j containing the values
     of each column/variable.
@@ -108,20 +101,22 @@ def _prep_counts(cdf, xcols, ycol, count_col=None):
 
     if len(xcols) == 1 and counts.shape[0] == 4:
         """For a 2x2 add helpful count and probability columns
-        Note that the first level of a column/variable is negative
+        Note that the first level of a column/variable is "negative"
         because its index in levels is 0"""
         n = counts.sum()
         levels = counts.index.levels
-        tmp = {'X+Y+':counts[(levels[0][1], levels[1][1])],
-               'X+Y-':counts[(levels[0][1], levels[1][0])],
-               'X-Y+':counts[(levels[0][0], levels[1][1])],
-               'X-Y-':counts[(levels[0][0], levels[1][0])]}
-        tmp.update({'X_marg':(tmp['X+Y+'] + tmp['X+Y-']) / n,
-                    'Y_marg':(tmp['X+Y+'] + tmp['X-Y+']) / n,
-                    'X|Y+':tmp['X+Y+'] / (tmp['X+Y+'] + tmp['X-Y+']),
-                    'X|Y-':tmp['X+Y-'] / (tmp['X+Y-'] + tmp['X-Y-']),
-                    'Y|X+':tmp['X+Y+'] / (tmp['X+Y+'] + tmp['X+Y-']),
-                    'Y|X-':tmp['X-Y+'] / (tmp['X-Y+'] + tmp['X-Y-'])})
+        tmp = {'X+MEM+':counts[(levels[0][1], 'MEM+')],
+               'X+MEM-':counts[(levels[0][1], 'MEM-')],
+               'X-MEM+':counts[(levels[0][0], 'MEM+')],
+               'X-MEM-':counts[(levels[0][0], 'MEM-')]}
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            tmp.update({'X_marg':(tmp['X+MEM+'] + tmp['X+MEM-']) / n,
+                        'MEM_marg':(tmp['X+MEM+'] + tmp['X-MEM+']) / n,
+                        'X|MEM+':tmp['X+MEM+'] / (tmp['X+MEM+'] + tmp['X-MEM+']),
+                        'X|MEM-':tmp['X+MEM-'] / (tmp['X+MEM-'] + tmp['X-MEM-']),
+                        'MEM|X+':tmp['X+MEM+'] / (tmp['X+MEM+'] + tmp['X+MEM-']),
+                        'MEM|X-':tmp['X-MEM+'] / (tmp['X-MEM+'] + tmp['X-MEM-'])})
         out.update(tmp)
     return out
 
@@ -134,6 +129,10 @@ def neighborhood_tally(df, pwmat, x_cols, count_col='count', knn_neighbors=50, k
     For TCR analysis this can be used to test whether the TCRs in a neighborhood are associated with a certain trait or
     phenotype. You can use hier_diff.cluster_association_test with the output of this function to test for
     significnt enrichment.
+
+    Note on output: val_j/ct_j pairs provide the counts for each element of the n x 2 continency table where the last
+    dimension is always 'cmember' (MEM+ or MEM-) indicating cluster membership for each row. The X+MEM+ notation
+    is provided for convenience for 2x2 tables and X+ indicates the second level of x_col when sorted (e.g. 1 for [0, 1]).
 
     Params
     ------
@@ -197,14 +196,16 @@ def neighborhood_tally(df, pwmat, x_cols, count_col='count', knn_neighbors=50, k
             R = np.partition(pwmat[ii, :], K + 1)[K]
         else:
             R = knn_radius
-        y = (pwmat[ii, :] <= R).astype(float)
-        K = np.sum(y)
+        y_lu = {True:'MEM+', False:'MEM-'}
+        y_float = (pwmat[ii, :] <= R).astype(float)
+        y = np.array([y_lu[yy] for yy in y_float])
+        K = np.sum(y_float)
 
         cdf = df.assign(**{ycol:y})[[ycol, count_col] + x_cols]
         out = _prep_counts(cdf, x_cols, ycol, count_col)
 
         out.update({'index':clonei,
-                    'neighbors':list(df.index[np.nonzero(y)[0]]),
+                    'neighbors':list(df.index[np.nonzero(y_float)[0]]),
                     'K_neighbors':K,
                     'R_radius':R})
 
@@ -324,10 +325,13 @@ def hcluster_tally(df, pwmat, x_cols, Z=None, count_col='count', subset_ind=None
 
     for cid, m in members.items():
         not_m = [i for i in range(n) if not i in m]
-        y = np.zeros(n)
-        y[m] = 1
+        y_float = np.zeros(n, dtype=np.int)
+        y_float[m] = 1
 
-        K = np.sum(y)
+        y_lu = {1:'MEM+', 0:'MEM-'}
+        y = np.array([y_lu[yy] for yy in y_float])
+
+        K = np.sum(y_float)
         R = np.max(pwmat[m, :][:, m])
 
         cdf = clone_tmp.assign(**{ycol:y})[[ycol, count_col] + x_cols]

@@ -59,6 +59,7 @@ def cluster_association_test(res, y_col='cmember', method='fishers'):
     
     n = np.max([int(k.split('_')[1]) for k in res.columns if 'val_' in k]) + 1
     ct_cols = ['ct_%d' % i for i in range(n)]
+    val_cols = ['val_%d' % i for i in range(n)]
 
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
@@ -82,13 +83,18 @@ def cluster_association_test(res, y_col='cmember', method='fishers'):
                 """Need to figure out how to efficiently refactor this test that wants the counts gby from tally"""
                 tmp = []
                 for i in range(res.shape[0]):
-                    counts = _dict_to_nby2(res[ct_cols + ['ct_columns', 'levels']].iloc[i].to_dict())
+                    counts = _dict_to_nby2(res[ct_cols + val_cols + ['ct_columns', 'levels']].iloc[i].to_dict())
+                    """Flip columns so that (0, 0) is cluster member (1)"""
+                    counts = counts.unstack(y_col)[['MEM+', 'MEM-']]
                     tables = []
                     for i, gby in counts.groupby(level=counts.index.names[1:]):
                         if gby.shape == (2, 2):
-                            tables.append(gby.values)
+                            tmp_tab = gby.values
+                            """Flip the rows of each table so that (0, 0) is X+ (second value of X)"""
+                            # tmp_tab = tmp_tab[::-1, :]
+                            tables.append(tmp_tab)
 
-                    tmp.apend(_CMH_NBR(tables))
+                    tmp.append(_CMH_NBR(tables))
                 tmp = pd.DataFrame(tmp)
                 res = pd.concat((res, tmp), axis=1)              
 
@@ -158,13 +164,14 @@ def _fisherNBR(res_df, ct_cols):
     
     The count_cols should be in the following order:
     
-    a   X+/member+
-    b   X+/member-
-    c   X-/member+
-    d   X-/member-
+    a   X+/MEM+
+    b   X+/MEM-
+    c   X-/MEM+
+    d   X-/MEM-
 
-    such that an OR > 1 [(a / c) / (b / d)] indicates enrichment of X
-    withing the cluster.
+    where X+ indicates the second level of x_col (e.g. 1 for [0, 1]). The result is that
+    that an OR > 1 = [(a / c) / (b / d)] indicates enrichment of X
+    within the cluster.
 
     Relative-rate of X in vs. out of the cluster is also provided.
 

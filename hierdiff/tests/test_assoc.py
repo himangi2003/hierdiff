@@ -73,7 +73,7 @@ class TestAssoc(unittest.TestCase):
                           method='complete')
         res = cluster_association_test(res, method='chi2')
 
-    def test_hier_chi2(self):
+    def test_hier_chi2_2vars(self):
         dat, pw = _generate_peptide_data()
         res, Z = hierdiff.hcluster_tally(dat,
                           pwmat=scipy.spatial.distance.squareform(pw),
