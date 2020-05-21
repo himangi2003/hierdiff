@@ -40,7 +40,7 @@ def _counts_to_cols(counts):
                 by accident or e.g. all instances are cmember = 1 (top node, big R)"""
             if name == 'cmember':
                 levels.append(('MEM+', 'MEM-'))    
-            elif not 0 in lev:
+            elif isinstance(lev[0], int):
                 levels.append(tuple(sorted((0, lev[0]))))
             else:
                 levels.append(tuple(sorted(('REF', lev[0]))))
@@ -212,7 +212,6 @@ def neighborhood_tally(df, pwmat, x_cols, count_col='count', knn_neighbors=50, k
         res.append(out)
 
     res_df = pd.DataFrame(res)
-    print('res_df', res_df.shape)
     return res_df
 
 def hcluster_tally(df, pwmat, x_cols, Z=None, count_col='count', subset_ind=None, method='complete', optimal_ordering=True):

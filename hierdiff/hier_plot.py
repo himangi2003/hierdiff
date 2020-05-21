@@ -17,12 +17,8 @@ __all__ = ['plot_hclust',
            'plot_hclust_props']
 
 """TODO:
- - Test only a subset of the rows that have been clustered
- - Control x and y zoom independently
-   https://stackoverflow.com/questions/61071276/d3-synchronizing-2-separate-zoom-behaviors/61164185#61164185
- - Include option for pruning.
- - Modify so that plots work with test_within results (or specify that plots should be made using a groupby on those columns)
- """
+  - Control x and y zoom independently
+   https://stackoverflow.com/questions/61071276/d3-synchronizing-2-separate-zoom-behaviors/61164185#61164185"""
 set1_colors = ["#e41a1c", "#377eb8", "#4daf4a",
                "#984ea3", "#ff7f00", "#ffff33",
                "#a65628", "#f781bf", "#999999"]
@@ -109,9 +105,12 @@ def _hclust_paths(Z, height, width, margin=10, res=None, alpha_col='pvalue', alp
     paths = []
 
     if not res is None:
-        x_val_cols = [c for c in res.columns if 'x_val_' in c]
-        x_freq_cols = [c for c in res.columns if 'x_freq_' in c]
-        x_vals = [res[c].iloc[0] for c in x_val_cols]
+        """Use cts from every other element since cluster membership is 
+        always the last feature of the counts array and is therefore the innermost loop"""
+        x_val_cols = [c for c in res.columns if 'val_' in c][::2]
+        x_ct_cols = [c.replace('val', 'ct') for c in x_val_cols]
+        x_vals = ['|'.join(res[c].iloc[0][:-1]) for c in x_val_cols]
+
         legend_data = [{'label':v, 'color':c} for v,c in zip(x_vals, colors)]
     else:
         legend_data = []    
@@ -151,8 +150,8 @@ def _hclust_paths(Z, height, width, margin=10, res=None, alpha_col='pvalue', alp
             ann.extend(['%s: %s' % (tt, cid_res[tt]) for tt in tooltip_cols])
             annotations.append(dict(annotation=ann, x1=xscale(xx[1]), x2=xscale(xx[2]), y1=yscale(yy[1]), y2=yscale(yy[2])))
             if alpha is None or cid_res[alpha_col] <= alpha and N > min_count:
-                obs = np.asarray(cid_res[x_freq_cols])
-                obs = obs / np.sum(obs)
+                cts = np.asarray(cid_res[x_ct_cols])
+                obs = cts / np.sum(cts)
                 L = (xx[2] - xx[1])
                 xvec = L * np.concatenate(([0.], obs, [1.]))
                 curX = xx[1]
@@ -170,6 +169,7 @@ def _hclust_paths(Z, height, width, margin=10, res=None, alpha_col='pvalue', alp
                              lw=10,
                              solid_capstyle='butt')"""
                     curX += L*obs[i]
+
         else:
             paths.append(dict(coords=[[xscale(x), yscale(y)] for x,y in zip(xx, yy)], stroke='black', stroke_width=1))
             s = ['cid: %d' % cid]

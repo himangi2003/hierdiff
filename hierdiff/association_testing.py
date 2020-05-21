@@ -77,7 +77,7 @@ def cluster_association_test(res, y_col='cmember', method='fishers'):
                 for i in range(res.shape[0]):
                     tab = res[ct_cols].iloc[i].values.reshape((len(ct_cols) // 2, 2))
                     tmp['chisq'][i], tmp['pvalue'][i] = _chi2NBR(tab)
-                res.assign(**tmp)                
+                res = res.assign(**tmp)                
                 
             elif method in ['chm', 'cmh']:
                 """Need to figure out how to efficiently refactor this test that wants the counts gby from tally"""
