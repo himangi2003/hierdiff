@@ -57,32 +57,32 @@ def cluster_association_test(res, y_col='cmember', method='fishers'):
     method : str
         Method for testing: fishers, chi2, chm"""
     
-    n = np.max([int(k.split('_')[1]) for k in res.columns if 'ct_' in k]) + 1
+    n = np.max([int(k.split('_')[1]) for k in res.columns if 'val_' in k]) + 1
     ct_cols = ['ct_%d' % i for i in range(n)]
 
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
 
-        if test == 'fishers':
+        if method == 'fishers':
             if n != 4:
                 raise ValueError("Number of ct_cols must equal 4 (2x2) to use Fisher's exact test")
             out = _fisherNBR(res, ct_cols=['ct_%d' % i for i in range(4)])
-            res_df = res_df.assign(**out)
+            res = res.assign(**out)
 
         else:
-            if test in ['chisq', 'chi2']:
-                res = {'chisq':np.nan * np.zeros(res_df.shape[0]),
-                        'pvalue':np.nan * np.zeros(res_df.shape[0])}
-                for i in range(res_df.shape[0]):
-                    tab = res_df[ct_cols].iloc[i].values.reshape((len(ct_cols) // 2, 2))
-                    res['chisq'][i], res['pvalue'][i] = _chi2NBR(tab)
-                res_df.assign(**res)                
+            if method in ['chisq', 'chi2']:
+                tmp = {'chisq':np.nan * np.zeros(res.shape[0]),
+                        'pvalue':np.nan * np.zeros(res.shape[0])}
+                for i in range(res.shape[0]):
+                    tab = res[ct_cols].iloc[i].values.reshape((len(ct_cols) // 2, 2))
+                    tmp['chisq'][i], tmp['pvalue'][i] = _chi2NBR(tab)
+                res.assign(**tmp)                
                 
-            elif test in ['chm', 'cmh']:
+            elif method in ['chm', 'cmh']:
                 """Need to figure out how to efficiently refactor this test that wants the counts gby from tally"""
                 tmp = []
-                for i in range(res_df.shape[0]):
-                    counts = _dict_to_nby2(res_df[ct_cols + ['ct_columns', 'levels']].iloc[i].to_dict())
+                for i in range(res.shape[0]):
+                    counts = _dict_to_nby2(res[ct_cols + ['ct_columns', 'levels']].iloc[i].to_dict())
                     tables = []
                     for i, gby in counts.groupby(level=counts.index.names[1:]):
                         if gby.shape == (2, 2):
@@ -90,12 +90,12 @@ def cluster_association_test(res, y_col='cmember', method='fishers'):
 
                     tmp.apend(_CMH_NBR(tables))
                 tmp = pd.DataFrame(tmp)
-                res_df = pd.concat((res_df, tmp), axis=1)              
+                res = pd.concat((res, tmp), axis=1)              
 
-    for c in [c for c in res_df.columns if 'pvalue' in c]:
-        res_df = res_df.assign(**{c.replace('pvalue', 'FWERp'):fishersapi.adjustnonnan(res_df[c].values, method='holm'),
-                                  c.replace('pvalue', 'FDRq'):fishersapi.adjustnonnan(res_df[c].values, method='fdr_bh')})
-    return res_df
+    for c in [c for c in res.columns if 'pvalue' in c]:
+        res = res.assign(**{c.replace('pvalue', 'FWERp'):fishersapi.adjustnonnan(res[c].values, method='holm'),
+                                  c.replace('pvalue', 'FDRq'):fishersapi.adjustnonnan(res[c].values, method='fdr_bh')})
+    return res
 
 
 def _chi2NBR(tab):

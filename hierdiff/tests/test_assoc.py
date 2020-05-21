@@ -12,6 +12,7 @@ import scipy
 
 import pwseqdist as pwsd
 import hierdiff
+from hierdiff import cluster_association_test
 
 def _generate_peptide_data(L=5, n=100, seed=110820):
     """Attempt to generate some random peptide data with a
