@@ -73,20 +73,17 @@ class TestTally(unittest.TestCase):
         self.assertTrue(res2.shape[0] == dat.shape[0] - 1)
         cols = ['ct_%d' % i for i in range(4)]
         mm = (res[cols]!=res2[cols]).any(axis=1)
-        print(res.loc[mm, cols])
-        print(res2.loc[mm, cols])
+        #print(res.loc[mm, cols])
+        #print(res2.loc[mm, cols])
 
         self.assertTrue((res2[cols].values == res[cols].values).all())
+        expected_cols = ['ct_columns', 'val_0', 'ct_0', 'val_1', 'ct_1', 'val_2',
+                         'ct_2', 'val_3', 'ct_3', 'levels',
+                         'X+Y+', 'X+Y-', 'X-Y+', 'X-Y-', 'X_marg', 'Y_marg', 'X|Y+',
+                         'X|Y-', 'Y|X+', 'Y|X-', 'cid', 'members',
+                         'members_i', 'children', 'K_neighbors', 'R_radius']
+        self.assertTrue(np.all([c in res for c in expected_cols]))
     
-        res2, Z = hierdiff.hcluster_tally(dat,
-                          pwmat=scipy.spatial.distance.squareform(pw),
-                          Z=Z,
-                          x_cols=['trait1'],
-                          count_col='count',
-                          method='complete')
-        self.assertTrue(res2.shape[0] == dat.shape[0] - 1)
-
-        self.assertTrue((res2.values == res.values).all())
 
     def test_hier_tally_2traits(self):
         dat, pw = _generate_peptide_data()
@@ -95,8 +92,11 @@ class TestTally(unittest.TestCase):
                           x_cols=['trait1', 'trait2'],
                           count_col='count',
                           method='complete')
-        print(res.head())
-        # CHECK COLUMN HEADINGS
+        
+        expected_cols = ['ct_columns', 'val_0', 'val_1', 'val_2', 'val_3',
+                         'val_4', 'val_5', 'val_6', 'val_7']
+                         
+        self.assertTrue(np.all([c in res for c in expected_cols]))    
         self.assertTrue(res.shape[0] == dat.shape[0] - 1)
 
     def test_nn_tally(self):
