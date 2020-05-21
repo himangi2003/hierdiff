@@ -26,27 +26,104 @@ Write a general function that accepts cluster labels? Should be easy enough
    that can be easily demonstrated?
  * Plot function should take the counts output providing introspection with or without pvalues/testing"""
 
+def _counts_to_cols(counts):
+    """Encodes the counts Series as columns that can be added to a takky result row
+
+    Example counts table:
+
+    trait1  trait2  cmember
+    0       0       0          233
+                    1          226
+            1       0           71
+                    1           79
+    1       0       0            0
+                    1            0
+            1       0            0
+                    1            9"""
+    j = 0
+    cols = tuple(counts.index.names)
+    levels = []
+    for lev in counts.index.levels:
+        if len(lev) == 1:
+            if not 0 in lev:
+                """This solves the problem of when a variable with one level is included
+                by accident or e.g. all instances are cmember = 1 (top node, big R)"""
+                levels.append((0, lev[0]))
+            else:
+                levels.append(('REF', lev[0]))
+        else:
+            levels.append(tuple(lev))
+    levels = tuple(levels)
+
+    out = {'ct_columns':cols}
+    for xis in itertools.product(*(range(len(u)) for u in levels)):
+        vals = []
+        for ui, (col, u, xi) in enumerate(zip(counts.index.names, levels, xis)):
+            vals.append(u[xi])
+        try:
+            ct = counts.loc[tuple(vals)]
+        except KeyError:
+            ct = 0
+        out.update({'val_%d' % j:tuple(vals),
+                    'ct_%d' % j:ct})
+        j += 1
+    return out
+
+def _dict_to_nby2(d):
+    """Takes the encoded columns of counts from a results row and re-creates the counts table"""
+    cols = d['ct_columns']
+    n = np.max([int(k.split('_')[1]) for k in d if 'val_' in k]) + 1
+    cts = [d['ct_%d' % j] for j in range(n)]
+    idx = pd.MultiIndex.from_tuples([d['val_%d' % j] for j in range(n)], names=cols)
+    counts = pd.Series(cts, index=idx)
+    return counts
+
 def _prep_counts(cdf, xcols, ycol, count_col=None):
-    """Returns a pd.DataFrame with rows for each (x_col, x_val) combination
-    and columns for cluster memberhship (member+, member-)
+    """Returns a dict with keys that can be added to a result row to store tallies
 
-    When values are raveled the values of a 2 x 2 (a, b, c, d) are:
-        x_col_0|x_val_0+/member+
-        x_col_0|x_val_0+/member-
-        x_col_0|x_val_0-/member+
-        x_col_0|x_val_0-/member-
+    For a 2x2 table the data is encoded as follows
+    X+Y+ encodes the second level in Y (cluster membership = 1) and X
+    and out contains columns named val_j and ct_j where j is ravel order, such that
+    the values of a 2x2 table (a, b, c, d) are:
+        ct_0    X+Y+    a    First level of X and a cluster member
+        ct_1    X+Y-    b    First level of X and a non-member
+        ct_2    X-Y+    c    Second level of X and a cluster member
+        ct_3    X-Y-    d    Second level of X and a non-member\
 
-    which means OR > 1 using fishersapi is enrichment"""
+    val_j also encodes explictly the values of the X levels and cluster membership indicator (1 = member)
+    This means that an OR > 1 is enrichment of the first level of X in the cluster.
+
+    Longer tables are stored in ravel order with ct_j/val_j pairs with val_j containing the values
+    of each column/variable.
+
+    Key "ct_columns" contains the xcols and ycol as a list
+    Ket levels contains the levels of xcols and ycol as lists from a pd.Series.MultiIndex"""
     if count_col is None:
         cdf = cdf.assign(count=1)
         count_col = 'count'
-    counts = cdf.groupby(xcols + [ycol], sort=True)[count_col].agg(np.sum).unstack(ycol).fillna(0)
-    for i in [0, 1]:
-        if not i in counts.columns:
-            counts.loc[:, i] = np.zeros(counts.shape[0])
+    counts = cdf.groupby(xcols + [ycol], sort=True)[count_col].agg(np.sum)
+    out = _counts_to_cols(counts)
+    counts = _dict_to_nby2(out)
+    out['levels'] = [list(lev) for lev in counts.index.levels]
 
-    counts = counts[[1, 0]]
-    return counts
+    if len(xcols) == 1 and counts.shape[0] == 4:
+        """For a 2x2 add helpful count and probability columns
+        Note that the first level of a column/variable is negative
+        because its index in levels is 0"""
+        n = counts.sum()
+        levels = counts.index.levels
+        tmp = {'X+Y+':counts[(levels[0][1], levels[1][1])],
+               'X+Y-':counts[(levels[0][1], levels[1][0])],
+               'X-Y+':counts[(levels[0][0], levels[1][1])],
+               'X-Y-':counts[(levels[0][0], levels[1][0])]}
+        tmp.update({'X_marg':(tmp['X+Y+'] + tmp['X+Y-']) / n,
+                    'Y_marg':(tmp['X+Y+'] + tmp['X-Y+']) / n,
+                    'X|Y+':tmp['X+Y+'] / (tmp['X+Y+'] + tmp['X-Y+']),
+                    'X|Y-':tmp['X+Y-'] / (tmp['X+Y-'] + tmp['X-Y-']),
+                    'Y|X+':tmp['X+Y+'] / (tmp['X+Y+'] + tmp['X+Y-']),
+                    'Y|X-':tmp['X-Y+'] / (tmp['X-Y+'] + tmp['X-Y-'])})
+        out.update(tmp)
+    return out
 
 def neighborhood_tally(df, pwmat, x_cols, count_col='count', knn_neighbors=50, knn_radius=None, subset_ind=None, cluster_ind=None):
     """Forms a cluster around each row of df and tallies the number of instances with/without traits
@@ -106,7 +183,7 @@ def neighborhood_tally(df, pwmat, x_cols, count_col='count', knn_neighbors=50, k
         clone_tmp.loc[not_ss, count_col] = 0
     else:
         clone_tmp = df
-    print('cluster_ind', cluster_ind.shape, cluster_ind)
+    
     res = []
     for clonei in cluster_ind:
         ii = np.nonzero(df.index == clonei)[0][0]
@@ -124,19 +201,7 @@ def neighborhood_tally(df, pwmat, x_cols, count_col='count', knn_neighbors=50, k
         K = np.sum(y)
 
         cdf = df.assign(**{ycol:y})[[ycol, count_col] + x_cols]
-        counts = _prep_counts(cdf, x_cols, ycol, count_col)
-
-        out = {'CTS%d' % i:v for i,v in enumerate(counts.values.ravel())}
-
-        uY = [1, 0]
-        out.update({'x_col_%d' % i:v for i,v in enumerate(x_cols)})
-        for i,xvals in enumerate(counts.index.tolist()):
-            if type(xvals) is tuple:
-                val = '|'.join(xvals)
-            else:
-                val = xvals
-            out.update({'x_val_%d' % i:val,
-                        'x_freq_%d' % i: counts.loc[xvals, 1] / counts.loc[xvals].sum()})
+        out = _prep_counts(cdf, x_cols, ycol, count_col)
 
         out.update({'index':clonei,
                     'neighbors':list(df.index[np.nonzero(y)[0]]),
@@ -266,20 +331,8 @@ def hcluster_tally(df, pwmat, x_cols, Z=None, count_col='count', subset_ind=None
         R = np.max(pwmat[m, :][:, m])
 
         cdf = clone_tmp.assign(**{ycol:y})[[ycol, count_col] + x_cols]
-        counts = _prep_counts(cdf, x_cols, ycol, count_col)
+        out = _prep_counts(cdf, x_cols, ycol, count_col)
 
-        out = {'CTS%d' % i:v for i,v in enumerate(counts.values.ravel())}
-
-        uY = [1, 0]
-        out.update({'x_col_%d' % i:v for i,v in enumerate(x_cols)})
-        for i,xvals in enumerate(counts.index.tolist()):
-            if type(xvals) is tuple:
-                val = '|'.join(xvals)
-            else:
-                val = xvals
-            out.update({'x_val_%d' % i:val,
-                        'x_freq_%d' % i: counts.loc[xvals, 1] / counts.loc[xvals].sum()})
-        
         out.update({'cid':cid,
                     'members':list(clone_tmp.index[m]),
                     'members_i':m,

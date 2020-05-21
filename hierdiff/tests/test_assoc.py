@@ -1,5 +1,5 @@
 """
-python -m pytest hierdiff/tests/test_tally.py
+python -m pytest hierdiff/tests/test_assoc.py
 """
 import unittest
 import numpy as np
@@ -52,88 +52,43 @@ def _generate_peptide_data(L=5, n=100, seed=110820):
                         'count':np.random.randint(4, 10, size=n)})
     return dat, pw
 
-class TestTally(unittest.TestCase):
+class TestAssoc(unittest.TestCase):
 
-    def test_hier_tally(self):
+    def test_hier_fisher(self):
         dat, pw = _generate_peptide_data()
         res, Z = hierdiff.hcluster_tally(dat,
                           pwmat=scipy.spatial.distance.squareform(pw),
                           x_cols=['trait1'],
                           count_col='count',
                           method='complete')
-        self.assertTrue(res.shape[0] == dat.shape[0] - 1)
+        res = cluster_association_test(res, method='fishers')
 
-        res2, Z = hierdiff.hcluster_tally(dat,
+    def test_hier_chi2(self):
+        dat, pw = _generate_peptide_data()
+        res, Z = hierdiff.hcluster_tally(dat,
                           pwmat=scipy.spatial.distance.squareform(pw),
-                          Z=Z,
                           x_cols=['trait1'],
                           count_col='count',
                           method='complete')
+        res = cluster_association_test(res, method='chi2')
 
-        self.assertTrue(res2.shape[0] == dat.shape[0] - 1)
-        cols = ['ct_%d' % i for i in range(4)]
-        mm = (res[cols]!=res2[cols]).any(axis=1)
-        print(res.loc[mm, cols])
-        print(res2.loc[mm, cols])
-
-        self.assertTrue((res2[cols].values == res[cols].values).all())
-    
-        res2, Z = hierdiff.hcluster_tally(dat,
+    def test_hier_chi2(self):
+        dat, pw = _generate_peptide_data()
+        res, Z = hierdiff.hcluster_tally(dat,
                           pwmat=scipy.spatial.distance.squareform(pw),
-                          Z=Z,
-                          x_cols=['trait1'],
+                          x_cols=['trait1', 'trait3'],
                           count_col='count',
                           method='complete')
-        self.assertTrue(res2.shape[0] == dat.shape[0] - 1)
+        res = cluster_association_test(res, method='chi2')
 
-        self.assertTrue((res2.values == res.values).all())
-
-    def test_hier_tally_2traits(self):
+    def test_hier_chm(self):
         dat, pw = _generate_peptide_data()
         res, Z = hierdiff.hcluster_tally(dat,
                           pwmat=scipy.spatial.distance.squareform(pw),
                           x_cols=['trait1', 'trait2'],
                           count_col='count',
                           method='complete')
-        print(res.head())
-        # CHECK COLUMN HEADINGS
-        self.assertTrue(res.shape[0] == dat.shape[0] - 1)
-
-    def test_nn_tally(self):
-        dat, pw = _generate_peptide_data()
-        res = hierdiff.neighborhood_tally(dat,
-                          pwmat=scipy.spatial.distance.squareform(pw),
-                          x_cols=['trait1'],
-                          count_col='count',
-                          knn_neighbors=None, knn_radius=3)
-        res = dat.join(res)
-        self.assertTrue(res.shape[0] == dat.shape[0])
-
-        res = hierdiff.neighborhood_tally(dat,
-                          pwmat=scipy.spatial.distance.squareform(pw),
-                          x_cols=['trait1'],
-                          count_col='count',
-                          knn_neighbors=30, knn_radius=None)
-        res = dat.join(res)
-        self.assertTrue(res.shape[0] == dat.shape[0])
-
-        res = hierdiff.neighborhood_tally(dat,
-                          pwmat=scipy.spatial.distance.squareform(pw),
-                          x_cols=['trait1'],
-                          count_col='count',
-                          knn_neighbors=0.1, knn_radius=None)
-        res = dat.join(res)
-        self.assertTrue(res.shape[0] == dat.shape[0])
-
-        res = hierdiff.neighborhood_tally(dat,
-                          pwmat=scipy.spatial.distance.squareform(pw),
-                          x_cols=['trait1'],
-                          count_col='count',
-                          knn_neighbors=0.1, knn_radius=None,
-                          cluster_ind=np.arange(50))
-        
-        self.assertTrue(res.shape[0] == 50)
-
+        res = cluster_association_test(res, method='chm')
 
 if __name__ == '__main__':
     unittest.main()

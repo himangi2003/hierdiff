@@ -14,10 +14,11 @@ from scipy import stats
 
 import fishersapi
 
+from .tally import _dict_to_nby2
+
 __all__ = ['cluster_association_test']
 
-
-def cluster_association_test(res, y_col='cmember', x_cols=None, method='fishers', min_n=20, **kwargs):
+def cluster_association_test(res, y_col='cmember', method='fishers'):
     """Use output of cluster tallies to test for enrichment of traits within a cluster.
 
     Use Fisher's exact test (test='fishers') to detect enrichment/association of the neighborhood
@@ -25,37 +26,47 @@ def cluster_association_test(res, y_col='cmember', x_cols=None, method='fishers'
 
     Tests the 2 x 2 table for each clone:
 
+    +----+--------+-------+--------+
+    |             |  Neighborhood  |
+    |             +-------+--------+
+    |             |   Y   |    N   |
     +----+----+-------+--------+
-    |         |  Neighborhood  |
-    |         +-------+--------+
-    |         |   Y   |    N   |
-    +----+----+-------+--------+
-    |    |  1 |   a   |    b   |
-    | X  +----+-------+--------+
-    |    |  0 |   c   |    d   |
-    +----+----+-------+--------+
-
-    Use the chi-squared test (test='chi2') or logistic regression (test='logistic') to detect association across multiple variables.
-    Note that with sparse neighborhoods Chi-squared tests and logistic regression are unreliable. It is possible
-    to pass an L2 penalty to the logistic regression using l2_alpha in kwargs, however this requires a permutation
-    test (nperms also in kwargs) to compute a p-value.
-
-    Use the Cochran-Mantel-Haenszel test (test='chm') to test stratified 2 x 2 tables: one X-var vs. neighborhood (Y), over several
-    strata defined in other X variables. Use x_cols[0] as the primary (binary) variable and other x_cols for the categorical
-    strata-defining variables. This tests the overall null that OR = 1 for x_cols[0]. A test is also performed
-    for homogeneity of the ORs among the strata (Breslow-Day test)."""
+    |    |  0 (+) |   a   |    b   |
+    | X  +--------+-------+--------+
+    |    |  1 (-) |   c   |    d   |
+    +----+--------+-------+--------+
     
-    if x_cols is None:
-        x_cols = [c for c in res.columns if c.startswith('x_col_')]
+    Note that the first level of an x_col (defined by sort order in the pd.DataFrame index) will
+    be encoded as "+" in the output. Similarly, cluster membership indicate by a value of 1
+
+    Use the chi-squared test (test='chi2') to detect association across multiple variables.
+    Note that with sparse neighborhoods Chi-squared tests are unreliable.
+
+    Use the Cochran-Mantel-Haenszel test (test='chm') to test stratified 2 x 2 tables:
+    one X-var vs. neighborhood (Y), over several strata defined in other X variables.
+    Use x_cols[0] as the primary (binary) variable and other x_cols for the categorical
+    strata-defining variables. This tests the overall null that OR = 1 for x_cols[0].
+    A test is also performed for homogeneity of the ORs among the strata (Breslow-Day test).
+
+    Parameters
+    ----------
+    res : pd.DataFrame
+        Result from one of the "tally" functions
+    y_col : col in res
+        Column indicating cluster membership. Almost certainly is 'cmember' if used a "tally" function
+    method : str
+        Method for testing: fishers, chi2, chm"""
+    
+    n = np.max([int(k.split('_')[1]) for k in res.columns if 'ct_' in k]) + 1
+    ct_cols = ['ct_%d' % i for i in range(n)]
 
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
 
         if test == 'fishers':
-            test_func = _fisherNBR
-            assert len(x_cols) == 1
-
-            out = _fisherNBR(res_df, count_cols=count_cols)
+            if n != 4:
+                raise ValueError("Number of ct_cols must equal 4 (2x2) to use Fisher's exact test")
+            out = _fisherNBR(res, ct_cols=['ct_%d' % i for i in range(4)])
             res_df = res_df.assign(**out)
 
         else:
@@ -63,7 +74,7 @@ def cluster_association_test(res, y_col='cmember', x_cols=None, method='fishers'
                 res = {'chisq':np.nan * np.zeros(res_df.shape[0]),
                         'pvalue':np.nan * np.zeros(res_df.shape[0])}
                 for i in range(res_df.shape[0]):
-                    tab = res_df[count_cols].iloc[i].values.reshape((len(count_cols) // 2, 2))
+                    tab = res_df[ct_cols].iloc[i].values.reshape((len(ct_cols) // 2, 2))
                     res['chisq'][i], res['pvalue'][i] = _chi2NBR(tab)
                 res_df.assign(**res)                
                 
@@ -71,9 +82,7 @@ def cluster_association_test(res, y_col='cmember', x_cols=None, method='fishers'
                 """Need to figure out how to efficiently refactor this test that wants the counts gby from tally"""
                 tmp = []
                 for i in range(res_df.shape[0]):
-                    counts = res_df[count_cols].iloc[i].values.reshape((len(count_cols) // 2, 2))
-                    counts.index = pd.MultiIndex.from_tuples([s.split('|') for s in count_cols])
-                    #RECREATE INDEX OF COUNTS?
+                    counts = _dict_to_nby2(res_df[ct_cols + ['ct_columns', 'levels']].iloc[i].to_dict())
                     tables = []
                     for i, gby in counts.groupby(level=counts.index.names[1:]):
                         if gby.shape == (2, 2):
@@ -90,17 +99,13 @@ def cluster_association_test(res, y_col='cmember', x_cols=None, method='fishers'
 
 
 def _chi2NBR(tab):
-    """Applies a chi2 test to every row of res_df using the columns provided
-    in count_cols. For each row, the vector of counts in count_cols can
-    be reshaped into a 2 x n table for providing to scipy.stats.chi2_contingency
+    """Applies a chi2 test to a table tab encoded in every row of res_df.
+    For each row, the vector of counts in ct_cols can be reshaped into
+    a n x 2 table for providing to scipy.stats.chi2_contingency
 
     Parameters
     ----------
-    res_df : pd.DataFrame [ntests x 2*nsquares of a contingency table]
-        Each row contains a set of counts to be tested.
-    count_cols : list
-        Columns containing the counts in a "flattened" order such that
-        it can be reshaped into a 2 x n contingency table
+    tab : n x 2 table, np.ndarray
 
     Returns
     -------
@@ -109,7 +114,7 @@ def _chi2NBR(tab):
         p-value for each test. Vectors will have length ntests, same as res_df.shape[0]"""
 
     """Squeeze out rows where there were no instances inside or outside the cluster
-    (happens with test_within)"""
+    (happens with subset_ind option)"""
     both_zero_ind = np.all(tab==0, axis=1)
     tab = tab[~both_zero_ind, :]
     try:
@@ -127,10 +132,8 @@ def _CMH_NBR(tables, continuity_correction=True):
 
     Parameters
     ----------
-    counts : pd.DataFrame
-        Generated by _prep_counts(), it has columns 1 and 0 for cluster membership
-        and rows for all combinations of values in x_cols (effectively a result of
-        grouping-by xcols)
+    tables : list of 2x2 tables
+
     continuity_correction : bool
         Whether to use a continuity correct in the CMH test.
 
@@ -148,7 +151,7 @@ def _CMH_NBR(tables, continuity_correction=True):
            'RR_pooled':st.riskratio_pooled}
     return out
 
-def _fisherNBR(res_df, count_cols):
+def _fisherNBR(res_df, ct_cols):
     """Applies a Fisher's exact test to every row of res_df using the 4 columns provided
     in count_cols. For each row, the vector of counts in count_cols can
     be reshaped into a 2 x 2 contingency table.
@@ -179,16 +182,16 @@ def _fisherNBR(res_df, count_cols):
     res : dict
         A dict of three numpy vectors containing the OR, the RR and the p-value.
         Vectors will have length ntests, same as res_df.shape[0]"""
-    a = res_df[count_cols[0]].values
-    b = res_df[count_cols[1]].values
-    c = res_df[count_cols[2]].values
-    d = res_df[count_cols[3]].values
+    a = res_df[ct_cols[0]].values
+    b = res_df[ct_cols[1]].values
+    c = res_df[ct_cols[2]].values
+    d = res_df[ct_cols[3]].values
 
     OR, p = fishersapi.fishers_vec(a, b, c, d, alternative='two-sided')
 
     RR = (a / (a + c)) / (b / (b + d))
     return {'RR':RR, 'OR':OR, 'pvalue':p}
-
+'''
 def _glmCatNBR(df, x_cols, y_col='NBR', count_col=None, l2_alpha=0, nperms=100):
     """Applies a logisitic regression with cluster membership as the outcome and
     other variables in x_cols as predictors. The major advantage of this method
@@ -257,4 +260,4 @@ def _glmCatNBR(df, x_cols, y_col='NBR', count_col=None, l2_alpha=0, nperms=100):
     out.update({'%s_coef' % c:res.params[c] for c in X.columns if not 'Intercept' in c})
     out.update({'%s_OR' % c:np.exp(res.params[c]) for c in X.columns if not 'Intercept' in c})
     return out
-
+'''
