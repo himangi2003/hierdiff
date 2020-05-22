@@ -23,17 +23,16 @@ opts = dict(name='hierdiff',
             license='MIT',
             author='Andrew Fiore-Gartland',
             author_email='agartlan@fredhutch.org',
-            version='0.1',
+            version='0.1.1',
             packages=PACKAGES
            )
 
-install_reqs = [
-                  'numpy==1.18.1',
-                  'pandas==1.0.0',
-                  'scipy==1.4.1',
-                  'jinja2==2.10',
-                  'statsmodels==0.10',
-                  'fishersapi==0.1.2',]
+install_reqs = [  'numpy>=1.18.1',
+                  'pandas>=1.0.0',
+                  'scipy>=1.4.1',
+                  'jinja2>=2.10.1',
+                  'statsmodels>=0.10',
+                  'fishersapi>=0.1.2']
 
 if __name__ == "__main__":
     setup(**opts, install_requires=install_reqs)
