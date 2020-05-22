@@ -10,7 +10,7 @@ pip install hierdiff
 
 ## Example
 
-```python
+```
 import hierdiff
 from scipy.spatial.distance import squareform
 
@@ -30,3 +30,5 @@ res = hierdiff.cluster_association_test(res, method='fishers')
 html = plot_hclust_props(Z, title='test_props2',
                             res=res, alpha=0.05, alpha_col='pvalue')
 ```
+
+![example](https://raw.githubusercontent.com/FredHutch/hierdiff/master/example_hier_props.png)
