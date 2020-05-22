@@ -6,7 +6,7 @@ import warnings
 from functools import partial
 
 import statsmodels.api as sm
-import patsy
+# import patsy
 
 from scipy.stats import chi2_contingency
 from scipy.stats.contingency import expected_freq
