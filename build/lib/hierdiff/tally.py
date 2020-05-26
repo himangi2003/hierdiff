@@ -259,6 +259,8 @@ def hcluster_tally(df, pwmat, x_cols, Z=None, count_col='count', subset_ind=None
         Provides option to tally counts only within a subset of df, but to maintain the clustering
         of all individuals. Allows for one clustering of pooled TCRs,
         but tallying/testing within a subset (e.g. participants or conditions)
+    min_n : int
+        Minimum size of a cluster for it to be tested.
     optimal_ordering : bool
         If True, the linkage matrix will be reordered so that the distance between successive
         leaves is minimal. This results in a more intuitive tree structure when the data are

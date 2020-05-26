@@ -48,15 +48,8 @@ class TestTally(unittest.TestCase):
                          'members_i', 'children', 'K_neighbors', 'R_radius']
         # print([c for c in expected_cols if not c in res.columns])
         self.assertTrue(np.all([c in res.columns for c in expected_cols]))
-
-    def test_hier_tally_no_count(self):
-        dat, pw = generate_peptide_data()
-        res, Z = hierdiff.hcluster_tally(dat,
-                                          pwmat=scipy.spatial.distance.squareform(pw),
-                                          x_cols=['trait1'],
-                                          method='complete')
-        self.assertTrue(res.shape[0] == dat.shape[0] - 1)
     
+
     def test_hier_tally_2traits(self):
         dat, pw = generate_peptide_data()
         res, Z = hierdiff.hcluster_tally(dat,
