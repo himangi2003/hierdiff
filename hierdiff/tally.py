@@ -55,7 +55,7 @@ def _counts_to_cols(counts):
             vals.append(u[xi])
         try:
             ct = counts.loc[tuple(vals)]
-        except KeyError:
+        except (pd.core.indexing.IndexingError, KeyError):
             ct = 0
         out.update({'val_%d' % j:tuple(vals),
                     'ct_%d' % j:ct})
