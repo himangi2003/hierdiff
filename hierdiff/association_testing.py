@@ -12,7 +12,7 @@ from scipy.stats import chi2_contingency
 from scipy.stats.contingency import expected_freq
 from scipy import stats
 
-import fishersapi
+from fishersapi import fishers_vec, fishers_frame, adjustnonnan
 
 from .tally import _dict_to_nby2
 
@@ -99,8 +99,8 @@ def cluster_association_test(res, y_col='cmember', method='fishers'):
                 res = pd.concat((res, tmp), axis=1)              
 
     for c in [c for c in res.columns if 'pvalue' in c]:
-        res = res.assign(**{c.replace('pvalue', 'FWERp'):fishersapi.adjustnonnan(res[c].values, method='holm'),
-                                  c.replace('pvalue', 'FDRq'):fishersapi.adjustnonnan(res[c].values, method='fdr_bh')})
+        res = res.assign(**{c.replace('pvalue', 'FWERp'):adjustnonnan(res[c].values, method='holm'),
+                                  c.replace('pvalue', 'FDRq'):adjustnonnan(res[c].values, method='fdr_bh')})
     return res
 
 
@@ -194,7 +194,7 @@ def _fisherNBR(res_df, ct_cols):
     c = res_df[ct_cols[2]].values
     d = res_df[ct_cols[3]].values
 
-    OR, p = fishersapi.fishers_vec(a, b, c, d, alternative='two-sided')
+    OR, p = fishers_vec(a, b, c, d, alternative='two-sided')
 
     RR = (a / (a + c)) / (b / (b + d))
     return {'RR':RR, 'OR':OR, 'pvalue':p}

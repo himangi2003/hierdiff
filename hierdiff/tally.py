@@ -6,7 +6,6 @@ import warnings
 import scipy.cluster.hierarchy as sch
 from scipy.spatial import distance
 
-import fishersapi
 
 __all__ = ['hcluster_tally',
 		   'neighborhood_tally']
