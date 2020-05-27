@@ -70,7 +70,7 @@ def _dict_to_nby2(d):
     counts = pd.Series(cts, index=idx)
     return counts
 
-def _prep_counts(cdf, xcols, ycol, count_col=None):
+def _prep_counts(cdf, xcols, ycol, count_col):
     """Returns a dict with keys that can be added to a result row to store tallies
 
     For a 2x2 table the data is encoded as follows
@@ -90,9 +90,6 @@ def _prep_counts(cdf, xcols, ycol, count_col=None):
 
     Key "ct_columns" contains the xcols and ycol as a list
     Ket levels contains the levels of xcols and ycol as lists from a pd.Series.MultiIndex"""
-    if count_col is None:
-        cdf = cdf.assign(count=1)
-        count_col = 'count'
     counts = cdf.groupby(xcols + [ycol], sort=True)[count_col].agg(np.sum)
     out = _counts_to_cols(counts)
     counts = _dict_to_nby2(out)
@@ -169,6 +166,10 @@ def neighborhood_tally(df, pwmat, x_cols, count_col='count', knn_neighbors=50, k
         pwmat = distance.squareform(pwmat)
         if pwmat.shape[0] != pwmat.shape[1] or pwmat.shape[0] != df.shape[0]:
             raise ValueError('Shape of pwmat %s does not match df %s' % (pwmat.shape, df.shape))
+    
+    if count_col is None:
+        df = df.assign(count=1)
+        count_col = 'count'
 
     ycol = 'cmember'
     if cluster_ind is None:
@@ -285,6 +286,10 @@ def hcluster_tally(df, pwmat, x_cols, Z=None, count_col='count', subset_ind=None
         if not Z.shape == (df.shape[0] - 1, 4):
             raise ValueError('First dimension of Z (%d) does not match that of df (%d,)' % (Z.shape[0], df.shape[0]))
     
+    if count_col is None:
+        df = df.assign(count=1)
+        count_col = 'count'
+
     clusters = {}
     for i, merge in enumerate(Z):
         """Cluster ID number starts at a number after all the leaves"""
