@@ -28,7 +28,7 @@ opts = dict(name='hierdiff',
            )
 
 install_reqs = [  'numpy>=1.18.1',
-                  'pandas>=1.0.0',
+                  'pandas>=0.24.2',
                   'scipy>=1.4.1',
                   'jinja2>=2.10.1',
                   'statsmodels>=0.10',
