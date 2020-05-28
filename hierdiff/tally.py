@@ -193,13 +193,13 @@ def neighborhood_tally(df, pwmat, x_cols, count_col='count', knn_neighbors=50, k
                 # print('Using K = %d (%1.0f%% of %d)' % (K, 100*frac, n))
             else:
                 K = int(knn_neighbors)
-            R = np.partition(pwmat[ii, :], K + 1)[K]
+            R = np.partition(pwmat[ii, :], K)[K]
         else:
             R = knn_radius
         y_lu = {True:'MEM+', False:'MEM-'}
         y_float = (pwmat[ii, :] <= R).astype(float)
         y = np.array([y_lu[yy] for yy in y_float])
-        K = np.sum(y_float)
+        K = int(np.sum(y_float))
 
         cdf = df.assign(**{ycol:y})[[ycol, count_col] + x_cols]
         out = _prep_counts(cdf, x_cols, ycol, count_col)
@@ -332,7 +332,7 @@ def hcluster_tally(df, pwmat, x_cols, Z=None, count_col='count', subset_ind=None
         y_lu = {1:'MEM+', 0:'MEM-'}
         y = np.array([y_lu[yy] for yy in y_float])
 
-        K = np.sum(y_float)
+        K = int(np.sum(y_float))
         R = np.max(pwmat[m, :][:, m])
 
         cdf = clone_tmp.assign(**{ycol:y})[[ycol, count_col] + x_cols]
