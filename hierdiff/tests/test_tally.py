@@ -5,6 +5,7 @@ import unittest
 import numpy as np
 import pandas as pd
 import operator
+import time
 
 from scipy.spatial import distance
 import scipy.cluster.hierarchy as sch
@@ -15,6 +16,9 @@ import hierdiff
 
 from .data_generator import generate_peptide_data
 
+
+def _hamming_wrapper(a, b):
+    return pwsd.metrics.hamming_distance(a['seq'], b['seq'])
 
 class TestTally(unittest.TestCase):
 
@@ -71,6 +75,29 @@ class TestTally(unittest.TestCase):
         self.assertTrue(np.all([c in res for c in expected_cols]))    
         self.assertTrue(res.shape[0] == dat.shape[0] - 1)
 
+    def test_running_nn_tally(self):
+        st = time.time()
+        dat, pw = generate_peptide_data()
+        print('Generated data and computed distances (%1.0fs)' % (time.time() - st))
+        st = time.time()
+        res = hierdiff.neighborhood_tally(dat,
+                          pwmat=scipy.spatial.distance.squareform(pw),
+                          x_cols=['trait1'],
+                          count_col='count',
+                          knn_neighbors=None, knn_radius=3)
+        print('Tallied neighborhoods with pre-computed distances (%1.0fs)' % (time.time() - st))
+        st = time.time()
+
+        rres = hierdiff.running_neighborhood_tally(dat,
+                          dist_func=_hamming_wrapper,
+                          dist_cols=['seq'],
+                          x_cols=['trait1'],
+                          count_col='count',
+                          knn_neighbors=None, knn_radius=3)
+        print('Tallied neighborhoods without pre-computed distances (%1.0fs)' % (time.time() - st))
+        self.assertTrue(res.shape[0] == rres.shape[0])
+        self.assertTrue((res == rres).all().all())
+
     def test_nn_tally(self):
         dat, pw = generate_peptide_data()
         res = hierdiff.neighborhood_tally(dat,
@@ -108,4 +135,6 @@ class TestTally(unittest.TestCase):
 
 
 if __name__ == '__main__':
+    #t = TestTally()
+    #t.test_running_nn_tally()
     unittest.main()

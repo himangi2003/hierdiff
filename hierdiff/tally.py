@@ -6,15 +6,19 @@ import warnings
 import scipy.cluster.hierarchy as sch
 from scipy.spatial import distance
 
+from joblib import Parallel, delayed
 
 __all__ = ['hcluster_tally',
-		   'neighborhood_tally']
+		   'neighborhood_tally',
+           'running_neighborhood_tally',
+           'any_cluster_tally']
 
 """TODO:
- * Write a general function that accepts cluster labels? Should be easy enough
- * Functions for cluster introspection are TCR specific and should be included, while the basic
-   stats could be largely excluded (included by example)
- * Plot function should take the counts output providing introspection with or without pvalues/testing"""
+ * Incorporate running_neighbors into TCRdist, wrapping the standard metrics so they can work
+   easily.
+ * Verify that running_neighbor uses all CPUs and less memory: see how it could be further optimized
+   with joblib caching, expecially for the metrics that include the CDR2 and CDR1.5 etc.
+"""
 
 def _counts_to_cols(counts):
     """Encodes the counts Series as columns that can be added to a takky result row
@@ -116,7 +120,7 @@ def _prep_counts(cdf, xcols, ycol, count_col):
         out.update(tmp)
     return out
 
-def neighborhood_tally(df, pwmat, x_cols, count_col='count', knn_neighbors=50, knn_radius=None, subset_ind=None, cluster_ind=None):
+def neighborhood_tally(df, pwmat, x_cols, count_col='count', knn_neighbors=50, knn_radius=None, cluster_ind=None):
     """Forms a cluster around each row of df and tallies the number of instances with/without traits
     in x_cols. The contingency table for each cluster/row of df can be used to test for enrichments of the traits
     in x_cols with the distances between each row provided in pwmat. The neighborhood is defined by the K closest neighbors
@@ -146,10 +150,6 @@ def neighborhood_tally(df, pwmat, x_cols, count_col='count', knn_neighbors=50, k
     knn_radius : float
         Radius for inclusion of neighbors within the neighborhood.
         Specify K or R but not both.
-    subset_ind : None or np.ndarray with partial index of df, optional
-        Provides option to tally counts only within a subset of df, but to maintain the clustering
-        of all individuals. Allows for one clustering of pooled TCRs,
-        but tallying/testing within a subset (e.g. participants or conditions)
     cluster_ind : None or np.ndarray
         Indices into df specifying the neighborhoods for testing.
 
@@ -174,14 +174,6 @@ def neighborhood_tally(df, pwmat, x_cols, count_col='count', knn_neighbors=50, k
     ycol = 'cmember'
     if cluster_ind is None:
         cluster_ind = df.index
-
-    if not subset_ind is None:
-        clone_tmp = df.copy()
-        """Set counts to zero for all clones that are not in the group being tested"""
-        not_ss = [ii for ii in df.index if not ii in subset_ind]
-        clone_tmp.loc[not_ss, count_col] = 0
-    else:
-        clone_tmp = df
     
     res = []
     for clonei in cluster_ind:
@@ -214,12 +206,16 @@ def neighborhood_tally(df, pwmat, x_cols, count_col='count', knn_neighbors=50, k
     res_df = pd.DataFrame(res)
     return res_df
 
-def hcluster_tally(df, pwmat, x_cols, Z=None, count_col='count', subset_ind=None, method='complete', optimal_ordering=True):
-    """Tests for association of categorical variables in x_cols with each cluster/node
-    in a hierarchical clustering of clones with distances in pwmat.
+def any_cluster_tally(df, cluster_df, x_cols, cluster_ind_col='neighbors', count_col='count'):
+    """Tallies clones inside (outside) each cluster for testing enrichment of other categorical
+    variables defined by x_cols in df. Clusters are defined in cluster_df using the cluster_ind_col
+    (default: 'neighbors') which should contain *positional* indices into df for cluster members.
+    
+    This function only organizes the counts for testing such that each row of the output represents
+    a cluster that could be tested for enrichment.
 
-    Use Fisher's exact test (test='fishers') to detect enrichment/association of the neighborhood/cluster
-    with one variable.
+    As an example, one could use Fisher's exact test to detect enrichment/association of the
+    neighborhood/cluster with one variable.
 
     Tests the 2 x 2 table for each clone:
 
@@ -233,16 +229,85 @@ def hcluster_tally(df, pwmat, x_cols, Z=None, count_col='count', subset_ind=None
     |    |  0 | c     |    d   |
     +----+----+-------+--------+
 
-    Use the chi-squared test (test='chi2') or logistic regression (test='logistic') to detect association across multiple variables.
-    Note that with small clusters Chi-squared tests and logistic regression are unreliable. It is possible
-    to pass an L2 penalty to the logistic regression using l2_alpha in kwargs, howevere this requires a permutation
-    test (nperms also in kwargs) to compute a value.
+    This and other tests are available with the cluster_association_test function that takes the output
+    of this function as input.
 
-    Use the Cochran-Mantel-Haenszel test (test='chm') to test stratified 2 x 2 tables: one VAR vs. cluster, over sever strata
-    defined in other variables. Use x_cols[0] as the primary (binary) variable and other x_cols for the categorical
-    strata-defining variables. This tests the overall null that OR = 1 for x_cols[0]. A test is also performed
-    for homogeneity of the ORs among the strata (Breslow-Day test).
+    Params
+    ------
+    df : pd.DataFrame [nclones x metadata]
+        Contains metadata for each clone.
+    cluster_df : pd.DataFrame, one row per cluster
+        Contains the column in cluster_ind_col (default: "neighbors") that should
+        contain positional indices into df indicating cluster membership
+    x_cols : list
+        List of columns to be tested for association with the neighborhood
+    count_col : str
+        Column in df that specifies counts.
+        Default none assumes count of 1 cell for each row.
+    cluster_ind_col : str, column in cluster_df
+        Values should be lists or tuples of positional indices into df
 
+
+    Returns
+    -------
+    res_df : pd.DataFrame [nclusters x results]
+        A 2xN table for each cluster."""
+
+    ycol = 'cmember'
+
+    if count_col is None:
+        df = df.assign(count=1)
+        count_col = 'count'
+
+    n = df.shape[0]
+
+    res = []
+    for cid, m in cluster_df[cluster_ind_col].values:
+        not_m = [i for i in range(n) if not i in m]
+        y_float = np.zeros(n, dtype=np.int)
+        y_float[m] = 1
+
+        y_lu = {1:'MEM+', 0:'MEM-'}
+        y = np.array([y_lu[yy] for yy in y_float])
+
+        K = int(np.sum(y_float))
+
+        cdf = df.assign(**{ycol:y})[[ycol, count_col] + x_cols]
+        out = _prep_counts(cdf, x_cols, ycol, count_col)
+
+        out.update({'cid':cid,
+                    'neighbors':list(df.index[m]),
+                    'neighbors_i':m,
+                    'K_neighbors':K})
+        res.append(out)
+
+    res_df = pd.DataFrame(res)
+    return res_df
+
+
+def hcluster_tally(df, pwmat, x_cols, Z=None, count_col='count', subset_ind=None, method='complete', optimal_ordering=True):
+    """Hierarchical clustering of clones with distances in pwmat. Tallies clones inside (outside) each cluster in preparation
+    for testing enrichment of other categorical variables defined by x_cols. This function only organizes the counts for testing
+    such that each row of the output represents a cluster that could be tested for enrichment.
+
+    One example test is Fisher's exact test to detect enrichment/association of the neighborhood/cluster
+    with one binary variable.
+
+    Tests the 2 x 2 table for each clone:
+
+    +----+----+-------+--------+
+    |         |    Cluster     |
+    |         +-------+--------+
+    |         | Y     |    N   |
+    +----+----+-------+--------+
+    |VAR |  1 | a     |    b   |
+    |    +----+-------+--------+
+    |    |  0 | c     |    d   |
+    +----+----+-------+--------+
+
+    This and other tests are available with the cluster_association_test function that takes the output
+    of this function as input.
+    
     Params
     ------
     df : pd.DataFrame [nclones x metadata]
@@ -267,7 +332,7 @@ def hcluster_tally(df, pwmat, x_cols, Z=None, count_col='count', subset_ind=None
     Returns
     -------
     res_df : pd.DataFrame [nclusters x results]
-        A 2x2 table for each cluster.
+        A 2xN table for each cluster.
     Z : linkage matrix [nclusters, df.shape[0] - 1, 4]
         Clustering result returned from scipy.cluster.hierarchy.linkage"""
 
@@ -339,8 +404,8 @@ def hcluster_tally(df, pwmat, x_cols, Z=None, count_col='count', subset_ind=None
         out = _prep_counts(cdf, x_cols, ycol, count_col)
 
         out.update({'cid':cid,
-                    'members':list(clone_tmp.index[m]),
-                    'members_i':m,
+                    'neighbors':list(clone_tmp.index[m]),
+                    'neighbors_i':m,
                     'children':cluster_members[cid],
                     'K_neighbors':K,
                     'R_radius':R})
@@ -348,3 +413,144 @@ def hcluster_tally(df, pwmat, x_cols, Z=None, count_col='count', subset_ind=None
 
     res_df = pd.DataFrame(res)
     return res_df, Z
+
+
+def running_neighborhood_tally(df, dist_func, dist_cols, x_cols, count_col='count', knn_neighbors=50, knn_radius=None, cluster_ind=None, ncpus=1):
+    """Forms a cluster around each row of df and tallies the number of instances with/without traits
+    in x_cols. The contingency table for each cluster/row of df can be used to test for enrichments of the traits
+    in x_cols. The neighborhood is defined by the K closest neighbors using dist_func, or defined by a distance radius.
+
+    Identical output to neighborhood_tally, however memory footprint will be lower for large datasets, at the cost of
+    increased computation. Computation is parallelized using joblib, with memory caching optional.
+
+    For TCR analysis this can be used to test whether the TCRs in a neighborhood are associated with a certain trait or
+    phenotype. You can use hier_diff.cluster_association_test with the output of this function to test for
+    significnt enrichment.
+
+    Note on output: val_j/ct_j pairs provide the counts for each element of the n x 2 continency table where the last
+    dimension is always 'cmember' (MEM+ or MEM-) indicating cluster membership for each row. The X+MEM+ notation
+    is provided for convenience for 2x2 tables and X+ indicates the second level of x_col when sorted (e.g. 1 for [0, 1]).
+
+    Params
+    ------
+    df : pd.DataFrame [nclones x metadata]
+        Contains metadata for each clone.
+    dist_func : function
+        Function that accepts two dicts representing the two TCRs being compared,
+        as well as an optional third dict that will maintain a cache of components
+        of the distance that should be stored for fast, repeated access (e.g. pairwise
+        distances among CDR2 loops, which are much less diverse)
+    x_cols : list
+        List of columns to be tested for association with the neighborhood
+    count_col : str
+        Column in df that specifies counts.
+        Default none assumes count of 1 cell for each row.
+    knn_neighbors : int
+        Number of neighbors to include in the neighborhood, or fraction of all data if K < 1
+    knn_radius : float
+        Radius for inclusion of neighbors within the neighborhood.
+        Specify K or R but not both.
+    subset_ind : None or np.ndarray with partial index of df, optional
+        Provides option to tally counts only within a subset of df, but to maintain the clustering
+        of all individuals. Allows for one clustering of pooled TCRs,
+        but tallying/testing within a subset (e.g. participants or conditions)
+    cluster_ind : None or np.ndarray
+        Indices into df specifying the neighborhoods for testing.
+
+    Returns
+    -------
+    res_df : pd.DataFrame [nclones x results]
+        Results from testing the neighborhood around each clone."""
+    if knn_neighbors is None and knn_radius is None:
+        raise(ValueError('Must specify K or radius'))
+    if not knn_neighbors is None and not knn_radius is None:
+        raise(ValueError('Must specify K or radius (not both)'))
+
+    if count_col is None:
+        df = df.assign(count=1)
+        count_col = 'count'
+
+    if cluster_ind is None:
+        cluster_ind = df.index
+
+    tally_params = dict(df=df,
+                        dist_func=dist_func,
+                        dist_cols=dist_cols,
+                        x_cols=x_cols,
+                        count_col=count_col,
+                        knn_neighbors=knn_neighbors,
+                        knn_radius=knn_radius)
+    
+    res = Parallel(n_jobs=ncpus)(delayed(_tally_one)(clonei=clonei, **tally_params) for clonei in cluster_ind)
+    """
+    res = []
+    for clonei in cluster_ind:
+        out = _tally_one(df, clonei, dist_func, dist_cols, x_cols, count_col, knn_neighbors, knn_radius)
+        res.append(out)
+    """
+    res_df = pd.DataFrame(res)
+    return res_df
+
+def _compute_pwslice(dist_dict, ii, dist_func):
+    pwvec = np.zeros(len(dist_dict))
+    for i in range(len(dist_dict)):
+        pwvec[i] = dist_func(dist_dict[ii], dist_dict[i])
+    return pwvec
+
+def _tally_one(df, clonei, dist_func, dist_cols, x_cols, count_col, knn_neighbors, knn_radius):
+    ycol = 'cmember'
+    ii = np.nonzero(df.index == clonei)[0][0]
+    """Operating on list of dicts is much faster the DataFrame
+    though conversion may not be wort it for huge DataFrames"""
+    records = df[dist_cols].to_dict(orient='records')
+    pwvec = _compute_pwslice(records, ii, dist_func)
+    if not knn_neighbors is None:
+        if knn_neighbors < 1:
+            frac = knn_neighbors
+            K = int(knn_neighbors * df.shape[0])
+            # print('Using K = %d (%1.0f%% of %d)' % (K, 100*frac, n))
+        else:
+            K = int(knn_neighbors)
+        R = np.partition(pwvec, K)[K]
+    else:
+        R = knn_radius
+    
+    y_lu = {1.:'MEM+', 0.:'MEM-'}
+    y_float = (pwvec <= R).astype(float)
+    y = np.array([y_lu[yy] for yy in y_float])
+    K = int(np.sum(y_float))
+
+    cdf = df.assign(**{ycol:y})[[ycol, count_col] + x_cols]
+    out = _prep_counts(cdf, x_cols, ycol, count_col)
+
+    out.update({'index':clonei,
+                'neighbors':list(df.index[np.nonzero(y_float)[0]]),
+                'K_neighbors':K,
+                'R_radius':R})
+    return out
+
+"""import pwseqdist as pwsd
+sys.path.append(opj(_git, 'hierdiff'))
+from hierdiff.tests.data_generator import generate_peptide_data
+import hierdiff
+
+import scipy
+
+def _hamming_wrapper(a, b):
+    return pwsd.metrics.hamming_distance(a['seq'], b['seq'])
+
+st = time.time()
+dat, pw = generate_peptide_data()
+print('Generated data and computed distances (%1.0fs)' % (time.time() - st))
+st = time.time()
+res = hierdiff.neighborhood_tally(dat,
+                  pwmat=scipy.spatial.distance.squareform(pw),
+                  x_cols=['trait1'],
+                  count_col='count',
+                  knn_neighbors=None, knn_radius=3)
+print('Tallied neighborhoods with pre-computed distances (%1.0fs)' % (time.time() - st))
+
+st = time.time()
+rres = running_neighborhood_tally(dat, dist_func=_hamming_wrapper, dist_cols=['seq'], x_cols=['trait1'], count_col='count', knn_neighbors=None, knn_radius=3)
+print('Tallied neighborhoods without pre-computed distances (%1.0fs)' % (time.time() - st))
+"""
