@@ -24,7 +24,7 @@
             display: block;
             padding: 2px;       
             font: 12px Arial;    
-            background: lightgray; 
+            background: white; 
             border: 0px;    
             border-radius: 8px;     
             pointer-events: none;     
@@ -56,7 +56,7 @@
         const path_dataset = JSON.parse(d3.select('pre#path_data').text());
         const line_dataset = JSON.parse(d3.select('pre#line_data').text());
         const legend_dataset = JSON.parse(d3.select('pre#legend_data').text());
-        const annotation_dataset = JSON.parse(d3.select('pre#annotation_data').text());
+        const annotation_dataset = JSON.parse(d3.select('pre#annotation_data').html());
         const height = d3.select('pre#meta_data').attr('height')
         const width = d3.select('pre#meta_data').attr('width')
 
@@ -69,7 +69,7 @@
                     //.center([width / 2, height / 2])
                     .scaleExtent([1, 50])
                     .on("zoom", zoomed);
-
+        function _decode(s){return s.replace(/@DBLQ/g, '"').replace(/@LT/g, '<').replace(/@GT/g, '>').replace(/@SL/g, '/');}
         function zoomed() {
             // g.attr("transform", d3.event.transform);
             links.attr("transform",
@@ -131,10 +131,10 @@
               .on("mouseover", function(d) {    
                     div.transition()    
                         .duration(200)    
-                        .style("opacity", 0.9);    
-                    div.html(d.annotation.join("<br/>"))  
+                        .style("opacity", 1.0);    
+                    div.html(_decode(d.annotation.join("<br/>")))
                         .style("left", (d3.event.pageX) + "px")   
-                        .style("top", (d3.event.pageY - 28) + "px");  
+                        .style("top", (d3.event.pageY - 28) + "px");
                     })          
                 .on("mouseout", function(d) {   
                     div.transition()    

@@ -34,9 +34,9 @@ def generate_peptide_data(L=5, n=300, seed=110820):
     def _assign_trait3(seq):
         return np.random.choice(['A', 'B', 'C'], p=[0.2, 0.4, 0.4])
     
-    pw = pwsd.apply_pairwise_sq(seqs, metric=pwsd.metrics.hamming_distance)
+    pw = pwsd.apply_pairwise_rect(seqs1=seqs, metric=pwsd.metrics.hamming_distance)
 
-    Z = sch.linkage(pw, method='complete')
+    Z = sch.linkage(distance.squareform(pw), method='complete')
     labels = sch.fcluster(Z, 50, criterion='maxclust')
 
     dat = pd.DataFrame({'seq':seqs,
