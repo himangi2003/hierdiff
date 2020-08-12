@@ -23,7 +23,7 @@ opts = dict(name='hierdiff',
             license='MIT',
             author='Andrew Fiore-Gartland',
             author_email='agartlan@fredhutch.org',
-            version='0.3',
+            version='0.4',
             packages=PACKAGES,
             include_package_data=True
            )
