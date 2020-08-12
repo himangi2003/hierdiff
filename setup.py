@@ -19,12 +19,13 @@ opts = dict(name='hierdiff',
             description='Clustering high-dimensional instances (e.g. T cell receptors) and testing whether clusters of instances are differentially abundant in two or more categorical conditions, with interactive tree visualization.',
             long_description=long_description,
             long_description_content_type='text/markdown',
-            url='https://github.com/FredHutch/hierdiff',
+            url='https://github.com/agartland/hierdiff',
             license='MIT',
             author='Andrew Fiore-Gartland',
             author_email='agartlan@fredhutch.org',
             version='0.3',
-            packages=PACKAGES
+            packages=PACKAGES,
+            include_package_data=True
            )
 
 install_reqs = [  'numpy>=1.18.1',
