@@ -18,7 +18,7 @@ class TestAssoc(unittest.TestCase):
     def test_hier_fisher(self):
         dat, pw = generate_peptide_data()
         res, Z = hcluster_tally(dat,
-                          pwmat=scipy.spatial.distance.squareform(pw),
+                          pwmat=pw,
                           x_cols=['trait1'],
                           count_col='count',
                           method='complete')
@@ -27,7 +27,7 @@ class TestAssoc(unittest.TestCase):
     def test_hier_chi2(self):
         dat, pw = generate_peptide_data()
         res, Z = hcluster_tally(dat,
-                          pwmat=scipy.spatial.distance.squareform(pw),
+                          pwmat=pw,
                           x_cols=['trait1'],
                           count_col='count',
                           method='complete')
@@ -36,7 +36,7 @@ class TestAssoc(unittest.TestCase):
     def test_hier_chi2_2vars(self):
         dat, pw = generate_peptide_data()
         res, Z = hcluster_tally(dat,
-                          pwmat=scipy.spatial.distance.squareform(pw),
+                          pwmat=pw,
                           x_cols=['trait1', 'trait3'],
                           count_col='count',
                           method='complete')
@@ -45,7 +45,7 @@ class TestAssoc(unittest.TestCase):
     def test_hier_chm(self):
         dat, pw = generate_peptide_data()
         res, Z = hcluster_tally(dat,
-                          pwmat=scipy.spatial.distance.squareform(pw),
+                          pwmat=pw,
                           x_cols=['trait1', 'trait2'],
                           count_col='count',
                           method='complete')
@@ -54,7 +54,7 @@ class TestAssoc(unittest.TestCase):
     def test_nn_fishers(self):
         dat, pw = generate_peptide_data()
         res = neighborhood_tally(dat,
-                          pwmat=scipy.spatial.distance.squareform(pw),
+                          pwmat=pw,
                           x_cols=['trait1'],
                           count_col='count',
                           knn_neighbors=None, knn_radius=3)
