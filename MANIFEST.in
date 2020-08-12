@@ -1,2 +1,2 @@
-hierdiff/hierdiff/templates/tree_template.html
-hierdiff/hierdiff/templates/minimal.html
+include hierdiff/hierdiff/templates/tree_template.html
+include hierdiff/hierdiff/templates/minimal.html
