@@ -9,7 +9,6 @@ from scipy.spatial import distance
 import scipy.cluster.hierarchy as sch
 
 import json
-from escapejson import escapejson
 
 """jinja2 import triggers DeprecationWarning about imp module"""
 from jinja2 import Environment, PackageLoader#, FileSystemLoader
