@@ -25,14 +25,14 @@ class TestTally(unittest.TestCase):
     def test_hier_tally(self):
         dat, pw = generate_peptide_data()
         res, Z = hierdiff.hcluster_tally(dat,
-                                          pwmat=scipy.spatial.distance.squareform(pw),
+                                          pwmat=pw,
                                           x_cols=['trait1'],
                                           count_col='count',
                                           method='complete')
         self.assertTrue(res.shape[0] == dat.shape[0] - 1)
 
         res2, Z = hierdiff.hcluster_tally(dat,
-                                          pwmat=scipy.spatial.distance.squareform(pw),
+                                          pwmat=pw,
                                           Z=Z,
                                           x_cols=['trait1'],
                                           count_col='count',
@@ -56,7 +56,7 @@ class TestTally(unittest.TestCase):
     def test_hier_tally_no_count(self):
         dat, pw = generate_peptide_data()
         res, Z = hierdiff.hcluster_tally(dat,
-                                          pwmat=scipy.spatial.distance.squareform(pw),
+                                          pwmat=pw,
                                           x_cols=['trait1'],
                                           method='complete')
         self.assertTrue(res.shape[0] == dat.shape[0] - 1)
@@ -64,7 +64,7 @@ class TestTally(unittest.TestCase):
     def test_hier_tally_2traits(self):
         dat, pw = generate_peptide_data()
         res, Z = hierdiff.hcluster_tally(dat,
-                          pwmat=scipy.spatial.distance.squareform(pw),
+                          pwmat=pw,
                           x_cols=['trait1', 'trait2'],
                           count_col='count',
                           method='complete')
@@ -81,7 +81,7 @@ class TestTally(unittest.TestCase):
         print('Generated data and computed distances (%1.0fs)' % (time.time() - st))
         st = time.time()
         res = hierdiff.neighborhood_tally(dat,
-                          pwmat=scipy.spatial.distance.squareform(pw),
+                          pwmat=pw,
                           x_cols=['trait1'],
                           count_col='count',
                           knn_neighbors=None, knn_radius=3)
@@ -101,7 +101,7 @@ class TestTally(unittest.TestCase):
     def test_nn_tally(self):
         dat, pw = generate_peptide_data()
         res = hierdiff.neighborhood_tally(dat,
-                          pwmat=scipy.spatial.distance.squareform(pw),
+                          pwmat=pw,
                           x_cols=['trait1'],
                           count_col='count',
                           knn_neighbors=None, knn_radius=3)
@@ -109,7 +109,7 @@ class TestTally(unittest.TestCase):
         self.assertTrue(res.shape[0] == dat.shape[0])
 
         res = hierdiff.neighborhood_tally(dat,
-                          pwmat=scipy.spatial.distance.squareform(pw),
+                          pwmat=pw,
                           x_cols=['trait1'],
                           count_col='count',
                           knn_neighbors=30, knn_radius=None)
@@ -117,7 +117,7 @@ class TestTally(unittest.TestCase):
         self.assertTrue(res.shape[0] == dat.shape[0])
 
         res = hierdiff.neighborhood_tally(dat,
-                          pwmat=scipy.spatial.distance.squareform(pw),
+                          pwmat=pw,
                           x_cols=['trait1'],
                           count_col='count',
                           knn_neighbors=0.1, knn_radius=None)
@@ -125,7 +125,7 @@ class TestTally(unittest.TestCase):
         self.assertTrue(res.shape[0] == dat.shape[0])
 
         res = hierdiff.neighborhood_tally(dat,
-                          pwmat=scipy.spatial.distance.squareform(pw),
+                          pwmat=pw,
                           x_cols=['trait1'],
                           count_col='count',
                           knn_neighbors=0.1, knn_radius=None,
