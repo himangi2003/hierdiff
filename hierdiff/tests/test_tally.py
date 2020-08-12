@@ -48,9 +48,9 @@ class TestTally(unittest.TestCase):
         expected_cols = ['ct_columns', 'val_0', 'ct_0', 'val_1', 'ct_1', 'val_2',
                          'ct_2', 'val_3', 'ct_3', 'levels',
                          'X+MEM+', 'X+MEM-', 'X-MEM+', 'X-MEM-', 'X_marg', 'MEM_marg', 'X|MEM+',
-                         'X|MEM-', 'MEM|X+', 'MEM|X-', 'cid', 'members',
-                         'members_i', 'children', 'K_neighbors', 'R_radius']
+                         'X|MEM-', 'MEM|X+', 'MEM|X-', 'cid', 'children', 'K_neighbors', 'R_radius']
         # print([c for c in expected_cols if not c in res.columns])
+        # print(res.columns)
         self.assertTrue(np.all([c in res.columns for c in expected_cols]))
 
     def test_hier_tally_no_count(self):
