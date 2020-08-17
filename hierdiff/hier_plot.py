@@ -144,7 +144,7 @@ def _hclust_paths(Z, height, width, margin=10, res=None, alpha_col='pvalue', alp
             
             if not prune_col is None:
                 """Prune (don't print) if all member results are also prune=True"""
-                prune = res.loc[res['cid'].isin(cid_res['neighbors']), prune_col].all()
+                prune = res.loc[res['cid'].isin(cid_res['children']), prune_col].all()
                 if prune:
                     continue
             paths.append(dict(coords=[[xscale(x), yscale(y)] for x,y in zip(xx, yy)], stroke='black', stroke_width=1))
