@@ -97,6 +97,17 @@ class TestTally(unittest.TestCase):
         print('Tallied neighborhoods without pre-computed distances (%1.0fs)' % (time.time() - st))
         self.assertTrue(res.shape[0] == rres.shape[0])
         self.assertTrue((res == rres).all().all())
+    
+    def test_nn_rect_tally(self):
+        dat, pw = generate_peptide_data()
+        res = hierdiff.neighborhood_tally(dat,
+                          pwmat=pw[:10, :],
+                          x_cols=['trait1'],
+                          df_centroids=dat.iloc[:10],
+                          count_col='count',
+                          knn_neighbors=0.1, knn_radius=None)
+        
+        self.assertTrue(res.shape[0] == 10)
 
     def test_nn_tally(self):
         dat, pw = generate_peptide_data()
@@ -123,15 +134,6 @@ class TestTally(unittest.TestCase):
                           knn_neighbors=0.1, knn_radius=None)
         res = dat.join(res)
         self.assertTrue(res.shape[0] == dat.shape[0])
-
-        res = hierdiff.neighborhood_tally(dat,
-                          pwmat=pw,
-                          x_cols=['trait1'],
-                          count_col='count',
-                          knn_neighbors=0.1, knn_radius=None,
-                          cluster_ind=np.arange(50))
-        
-        self.assertTrue(res.shape[0] == 50)
 
 
 if __name__ == '__main__':

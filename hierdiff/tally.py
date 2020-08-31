@@ -120,7 +120,7 @@ def _prep_counts(cdf, xcols, ycol, count_col):
         out.update(tmp)
     return out
 
-def neighborhood_tally(df, pwmat, x_cols, count_col='count', knn_neighbors=50, knn_radius=None, cluster_ind=None):
+def neighborhood_tally(df_pop, pwmat, x_cols, df_centroids=None, count_col='count', knn_neighbors=50, knn_radius=None):
     """Forms a cluster around each row of df and tallies the number of instances with/without traits
     in x_cols. The contingency table for each cluster/row of df can be used to test for enrichments of the traits
     in x_cols with the distances between each row provided in pwmat. The neighborhood is defined by the K closest neighbors
@@ -136,12 +136,20 @@ def neighborhood_tally(df, pwmat, x_cols, count_col='count', knn_neighbors=50, k
 
     Params
     ------
-    df : pd.DataFrame [nclones x metadata]
-        Contains metadata for each clone.
-    pwmat : np.ndarray [nclones x nclones]
-        Square distance matrix for defining neighborhoods
+    df_pop : pd.DataFrame [nclones x metadata]
+        Contains metadata for each clone in the population to be tallied.
+    pwmat : np.ndarray [df_centroids.shape[0] x df_pop.shape[0]]
+        Pairwise distance matrix for defining neighborhoods.
+        Number of rows in pwmat must match the number of rows in df_centroids,
+        which may be the number of rows in df_pop if df_centroids=None
     x_cols : list
         List of columns to be tested for association with the neighborhood
+    df_centroids : pd.DataFrame [nclones x 1]
+        An optional DataFrame containing clones that will act as centroids in the
+        neighborhood clustering. These can be a subset of df_pop or not, however
+        the number of rows in df_centroids must match the number of rows in pwmat.
+        If df_centroids=None then df_centroids = df_pop and all clones in df_pop
+        are used.
     count_col : str
         Column in df that specifies counts.
         Default none assumes count of 1 cell for each row.
@@ -150,38 +158,43 @@ def neighborhood_tally(df, pwmat, x_cols, count_col='count', knn_neighbors=50, k
     knn_radius : float
         Radius for inclusion of neighbors within the neighborhood.
         Specify K or R but not both.
-    cluster_ind : None or np.ndarray
-        Indices into df specifying the neighborhoods for testing.
 
     Returns
     -------
     res_df : pd.DataFrame [nclones x results]
-        Results from testing the neighborhood around each clone."""
+        Counts of clones within each neighborhood, grouped by x_cols.
+        The "neighbors" column provides the pd.DataFrame indices of the elements in
+        df_pop that are within the neighborhood of each centroid (not the integer/vector
+        based indices)"""
     if knn_neighbors is None and knn_radius is None:
         raise(ValueError('Must specify K or radius'))
     if not knn_neighbors is None and not knn_radius is None:
         raise(ValueError('Must specify K or radius (not both)'))
 
-    if pwmat.shape[0] != pwmat.shape[1] or pwmat.shape[0] != df.shape[0]:
-        pwmat = distance.squareform(pwmat)
-        if pwmat.shape[0] != pwmat.shape[1] or pwmat.shape[0] != df.shape[0]:
-            raise ValueError('Shape of pwmat %s does not match df %s' % (pwmat.shape, df.shape))
-    
+    if df_centroids is None:
+        df_centroids = df_pop
+        if pwmat.shape[0] != df_pop.shape[0]:
+            raise ValueError(f'Number of rows in pwmat {pwmat.shape[0]} does not match df_pop {df_pop.shape[0]}')
+        if pwmat.shape[1] != df_pop.shape[0]:
+            raise ValueError(f'Number of columns in pwmat {pwmat.shape[1]} does not match df_pop {df_pop.shape[0]}')
+    else:
+        if pwmat.shape[0] != df_centroids.shape[0]:
+            raise ValueError(f'Number of rows in pwmat {pwmat.shape[0]} does not match df_centroids {df_centroids.shape[0]}')
+        if pwmat.shape[1] != df_pop.shape[0]:
+            raise ValueError(f'Number of columns in pwmat {pwmat.shape[1]} does not match df_pop {df_pop.shape[0]}')
+
     if count_col is None:
-        df = df.assign(count=1)
+        df = df_pop.assign(count=1)
         count_col = 'count'
 
     ycol = 'cmember'
-    if cluster_ind is None:
-        cluster_ind = df.index
-    
+        
     res = []
-    for clonei in cluster_ind:
-        ii = np.nonzero(df.index == clonei)[0][0]
+    for ii in range(df_centroids.shape[0]):
         if not knn_neighbors is None:
             if knn_neighbors < 1:
                 frac = knn_neighbors
-                K = int(knn_neighbors * df.shape[0])
+                K = int(knn_neighbors * df_pop.shape[0])
                 # print('Using K = %d (%1.0f%% of %d)' % (K, 100*frac, n))
             else:
                 K = int(knn_neighbors)
@@ -193,11 +206,11 @@ def neighborhood_tally(df, pwmat, x_cols, count_col='count', knn_neighbors=50, k
         y = np.array([y_lu[yy] for yy in y_float])
         K = int(np.sum(y_float))
 
-        cdf = df.assign(**{ycol:y})[[ycol, count_col] + x_cols]
+        cdf = df_pop.assign(**{ycol:y})[[ycol, count_col] + x_cols]
         out = _prep_counts(cdf, x_cols, ycol, count_col)
 
-        out.update({'index':clonei,
-                    'neighbors':list(df.index[np.nonzero(y_float)[0]]),
+        out.update({'index':ii,
+                    'neighbors':list(df_pop.index[np.nonzero(y_float)[0]]),
                     'K_neighbors':K,
                     'R_radius':R})
 
