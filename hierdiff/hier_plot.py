@@ -99,7 +99,7 @@ def plot_hclust_props(Z, title='', res=None, alpha_col='pvalue', alpha=0.05, too
 
 def _encode(s):
     """Creates valid JSON strings that can be decoded by JS in th browser"""
-    return s.replace('"', '@DBLQ').replace('<', '@LT').replace('>', '@GT').replace('/', '@SL')
+    return repr(s).replace('"', '@DBLQ').replace('<', '@LT').replace('>', '@GT').replace('/', '@SL')
 
 
 def _hclust_paths(Z, height, width, margin=10, res=None, alpha_col='pvalue', alpha=0.05, tooltip_cols=[], colors=None, min_count=0, prune_col=None):
@@ -150,8 +150,10 @@ def _hclust_paths(Z, height, width, margin=10, res=None, alpha_col='pvalue', alp
             paths.append(dict(coords=[[xscale(x), yscale(y)] for x,y in zip(xx, yy)], stroke='black', stroke_width=1))
             
             N = np.sum(cid_res['K_neighbors'])
-            ann = ['cid: %d' % cid,
-                   'n: %1.0f' % N]
+
+            ann = [f'cid: {cid:d}',
+                   f'n_uniq: {N:1.0f}',
+                   f'n_ct: {np.sum(cid_res[x_ct_cols]):1.0f}']
             ann.extend(['%s: %s' % (tt, _encode(cid_res[tt])) for tt in tooltip_cols])
             annotations.append(dict(annotation=ann, x1=xscale(xx[1]), x2=xscale(xx[2]), y1=yscale(yy[1]), y2=yscale(yy[2])))
             if alpha is None or cid_res[alpha_col] <= alpha and N > min_count:
