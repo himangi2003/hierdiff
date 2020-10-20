@@ -20,7 +20,7 @@ from hierdiff import plot_hclust, hcluster_tally, plot_hclust_props, cluster_ass
 from .data_generator import generate_peptide_data
 
 class TestHierDiff(unittest.TestCase):
-    # @unittest.skip
+    #@unittest.skip
     def test_d3_plot(self):
         np.random.seed(110820)
         pwmat = distance.pdist(np.random.rand(100, 4))
@@ -32,7 +32,7 @@ class TestHierDiff(unittest.TestCase):
 
         self.assertTrue(True)
 
-    # @unittest.skip
+    #@unittest.skip
     def test_d3_plot_props(self):
         np.random.seed(110820)
         n = 1000
@@ -55,6 +55,30 @@ class TestHierDiff(unittest.TestCase):
 
         self.assertTrue(True)
 
+    def test_count_width(self):
+        np.random.seed(110820)
+        n = 100
+        pwmat = distance.pdist(np.random.randn(n, 4))
+        # Z = sch.linkage(pwmat, method='complete')
+
+        data = pd.DataFrame({'count':np.random.randint(low=1, high=20, size=n),
+                             'condition':np.random.choice(['Positive', 'Negative'], size=n)})
+        res, Z = hcluster_tally(data, distance.squareform(pwmat, force='matrix'),
+                                    x_cols=['condition'],
+                                    count_col='count',
+                                    method='complete')
+        # print(res.loc[res['pvalue'] < 0.5].head())
+
+        html = plot_hclust_props(Z, title='test_count_width',
+                                    res=res, alpha=None,
+                                    leaf_counts=data['count'])# , alpha=0.5, alpha_col='count')
+
+        with open(opj('hierdiff', 'tests', 'test_count_width.html'), 'w', encoding='utf-8') as fh:
+            fh.write(html)
+
+        self.assertTrue(True)
+
+    #@unittest.skip
     def test_props2(self):
         dat, pw = generate_peptide_data(n=100)
         np.random.seed(110820)
@@ -77,7 +101,7 @@ class TestHierDiff(unittest.TestCase):
 
         self.assertTrue(True)
 
-    
+    #@unittest.skip
     def test_props_motif(self):
         dat, pw = generate_peptide_data()
         np.random.seed(110820)

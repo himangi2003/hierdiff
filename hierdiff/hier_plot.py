@@ -13,6 +13,8 @@ import json
 """jinja2 import triggers DeprecationWarning about imp module"""
 from jinja2 import Environment, PackageLoader#, FileSystemLoader
 
+from .modified_scipy_dendrogram import modified_dendrogram
+
 __all__ = ['plot_hclust',
            'plot_hclust_props']
 
@@ -28,7 +30,7 @@ set3_colors = ["#8dd3c7", "#ffffb3", "#bebada", "#fb8072",
                "#d9d9d9", "#bc80bd", "#ccebc5", "#ffed6f"]
 
 
-def plot_hclust(Z, title=''):
+def plot_hclust(Z, title='', leaf_counts=None):
     """Plot tree of linkage-based hierarchical clustering. Nodes
     annotated with cluster ID.
 
@@ -36,15 +38,18 @@ def plot_hclust(Z, title=''):
     ----------
     Z : linkage matrix
         Result of calling sch.linkage on a compressed pair-wise distance matrix
+    leaf_counts : np.ndarray [Z.shape[0] - 1, ]
+        Weights/counts for each leaf of the tree, using the same order as pwdist matrix
+        used to generate linkage matrix Z.
 
     Returns
     -------
     html : str
         String that can be saved as HTML for viewing"""
-    html = plot_hclust_props(Z, title=title)
+    html = plot_hclust_props(Z, title=title, leaf_counts=leaf_counts)
     return html
 
-def plot_hclust_props(Z, title='', res=None, alpha_col='pvalue', alpha=0.05, tooltip_cols=[], colors=None, prune_col=None):
+def plot_hclust_props(Z, title='', res=None, alpha_col='pvalue', alpha=0.05, tooltip_cols=[], colors=None, prune_col=None, leaf_counts=None):
     """Plot tree of linkage-based hierarchical clustering, with nodes colored using stacked bars
     representing proportion of cluster members associated with specific conditions. Nodes also optionally
     annotated with pvalue, number of members or cluster ID.
@@ -63,7 +68,10 @@ def plot_hclust_props(Z, title='', res=None, alpha_col='pvalue', alpha=0.05, too
         Used for stacked bars of conditions at each node
     prune_col : str/column in res
         Column of res that indicates whether a result/node can be pruned from the tree.
-        The tree will not print any pruned nodes that only contain other pruned nodes.
+        Tree will not print any pruned nodes that only contain other pruned nodes.
+    leaf_counts : np.ndarray [Z.shape[0] - 1, ]
+        Weights/counts for each leaf of the tree, using the same order as pwdist matrix
+        used to generate Z linkage matrix.
 
     Returns
     -------
@@ -77,7 +85,8 @@ def plot_hclust_props(Z, title='', res=None, alpha_col='pvalue', alpha=0.05, too
                                                             alpha=alpha,
                                                             tooltip_cols=tooltip_cols,
                                                             colors=colors,
-                                                            prune_col=prune_col)
+                                                            prune_col=prune_col,
+                                                            leaf_counts=leaf_counts)
 
     #lines_df = 100 * pd.DataFrame({'x1':np.random.rand(10), 'y1':np.random.rand(10), 'x2':np.random.rand(10), 'y2':np.random.rand(10)})
     #lines_df = lines_df.assign(stroke='red', stroke_width=1.5)
@@ -99,10 +108,10 @@ def plot_hclust_props(Z, title='', res=None, alpha_col='pvalue', alpha=0.05, too
 
 def _encode(s):
     """Creates valid JSON strings that can be decoded by JS in th browser"""
-    return repr(s).replace('"', '@DBLQ').replace('<', '@LT').replace('>', '@GT').replace('/', '@SL')
+    return str(s).replace('"', '@DBLQ').replace('<', '@LT').replace('>', '@GT').replace('/', '@SL')
 
 
-def _hclust_paths(Z, height, width, margin=10, res=None, alpha_col='pvalue', alpha=0.05, tooltip_cols=[], colors=None, min_count=0, prune_col=None):
+def _hclust_paths(Z, height, width, margin=10, res=None, alpha_col='pvalue', alpha=0.05, tooltip_cols=[], colors=None, min_count=0, prune_col=None, leaf_counts=None):
     if colors is None:
         colors = set1_colors
     lines = []
@@ -120,19 +129,15 @@ def _hclust_paths(Z, height, width, margin=10, res=None, alpha_col='pvalue', alp
     else:
         legend_data = []    
 
-    dend = sch.dendrogram(Z, no_plot=True,
-                             color_threshold=None,
-                             link_color_func=lambda lid: hex(lid),
-                             above_threshold_color='FFFFF')
+    dend = modified_dendrogram(Z, counts=leaf_counts)
     
     xscale = _linear_scale_factory((np.min(np.array(dend['icoord'])), np.max(np.array(dend['icoord']))),
                                   (0+margin, width-margin))
     yscale = _linear_scale_factory((np.min(np.array(dend['dcoord'])), np.max(np.array(dend['dcoord']))),
                                   (height-margin, 0+margin))
 
-    for xx, yy, hex_cid in zip(dend['icoord'], dend['dcoord'], dend['color_list']):
+    for xx, yy, cid in zip(dend['icoord'], dend['dcoord'], dend['cid_list']):
         #axh.plot(xx, yy, zorder=1, lw=0.5, color='k', alpha=1)
-        cid = int(hex_cid, 16)
         if not res is None:
             """Assumes there is only one matching cid (not true if multiple results are passed)"""
             cid_res = res.loc[res['cid'] == cid]
