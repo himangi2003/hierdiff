@@ -109,6 +109,29 @@ class TestTally(unittest.TestCase):
         
         self.assertTrue(res.shape[0] == 10)
 
+    def test_sparse_nn_rect_tally(self):
+        dat, pw = generate_peptide_data()
+        res = hierdiff.neighborhood_tally(dat,
+                          pwmat=pw[:10, :],
+                          x_cols=['trait1'],
+                          df_centroids=dat.iloc[:10],
+                          count_col='count',
+                          knn_neighbors=0.1, knn_radius=None)
+        self.assertTrue(res.shape[0] == 10)
+        
+        pw_sparse = pw.copy()
+        pw_sparse[pw_sparse == 0] = -1
+        pw_sparse = scipy.sparse.csr_matrix(pw_sparse)
+
+        res_sparse = hierdiff.neighborhood_tally(dat,
+                          pwmat=pw_sparse[:10, :],
+                          x_cols=['trait1'],
+                          df_centroids=dat.iloc[:10],
+                          count_col='count',
+                          knn_neighbors=0.1, knn_radius=None)
+        self.assertTrue((res == res_sparse).all().all())
+        
+
     def test_nn_tally(self):
         dat, pw = generate_peptide_data()
         res = hierdiff.neighborhood_tally(dat,

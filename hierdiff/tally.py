@@ -12,7 +12,8 @@ from joblib import Parallel, delayed
 __all__ = ['hcluster_tally',
 		   'neighborhood_tally',
            'running_neighborhood_tally',
-           'any_cluster_tally']
+           'any_cluster_tally',
+           'find_radius_members']
 
 """TODO:
  * Incorporate running_neighbors into TCRdist, wrapping the standard metrics so they can work
@@ -226,22 +227,52 @@ def neighborhood_tally(df_pop, pwmat, x_cols, df_centroids=None, count_col='coun
     res_df = pd.DataFrame(res)
     return res_df
 
-def find_radius_members(ii, pwmat, radius=12):
-    """Return a binary indicator vector of shape (pwmat.shape[1], ) and
+def find_radius_members(i, pwmat, radius, return_indices=False):
+    """Find NN columns in pwmat[i, :] (iith row) with D <= radius.
+    
+    Accepts a sparse or non-sparse array. Sparse array should be csr_matrix
+    and should encode D=0 as 0, with D>radius as NA/sparse.
+
+    Return a binary indicator vector of shape (pwmat.shape[1], ) and
     dtype=float, with a 1 for every distance entry in the iith row
-    of the pwmat with D <= radius"""
+    of the pwmat with D <= radius
+
+    Parameters
+    ----------
+    i : int
+        Row index in pwmat
+    pwmat : np.ndarray or scipy.sparse.csr_matrix
+        Square or rectangular distance matrix
+    radius : float or int (dtype = pwmat dtype preferably
+    return_indices : bool
+        Default, False, returns binary/bool index into cols of pwmat.
+        True, returns "non-zero" integer column indices into pwmat
+
+    Returns
+    -------
+    indicator or col_indices : bool, pwmat.shape[1] or vector of integers
+    """
     if scipy.sparse.issparse(pwmat):
         # SLOW
         # row = np.asarray(pwmat[i, :].todense())
         # row[row == 0] = radius + 1
         # return np.nonzero(row <= radius)[1]
-        ind = np.nonzero(pwmat.data[S.indptr[i]:pwmat.indptr[i+1]] <= radius)[0]
+        ind = np.nonzero(pwmat.data[pwmat.indptr[i]:pwmat.indptr[i+1]] <= radius)[0]
         col_indices = pwmat.indices[pwmat.indptr[i]:pwmat.indptr[i+1]][ind]
-        y_float = np.zeros(pwmat.shape[1], dtype=float)
-        y_float[col_indices] = 1
-    else:    
-        y_float = (pwmat[ii, :] <= radius).astype(float)
-    return y_float
+        if return_indices:
+            return col_indices
+        else:
+            y_float = np.zeros(pwmat.shape[1], dtype=bool)
+            y_float[col_indices] = True
+            return y_float
+    else:
+        if not return_indices:
+            y_float = (pwmat[i, :] <= radius)
+            return y_float
+        else:
+            col_indices = np.nonzero(y_float)[0]
+            return col_indices
+    
     
 
 def any_cluster_tally(df, cluster_df, x_cols, cluster_ind_col='neighbors', count_col='count'):
