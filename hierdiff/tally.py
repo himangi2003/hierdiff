@@ -120,7 +120,7 @@ def _prep_counts(cdf, xcols, ycol, count_col):
         out.update(tmp)
     return out
 
-def neighborhood_tally(df_pop, pwmat, x_cols, df_centroids=None, count_col='count', knn_neighbors=50, knn_radius=None):
+def neighborhood_tally(df_pop, pwmat, x_cols, df_centroids=None, count_col='count', knn_neighbors=None, knn_radius=25):
     """Forms a cluster around each row of df and tallies the number of instances with/without traits
     in x_cols. The contingency table for each cluster/row of df can be used to test for enrichments of the traits
     in x_cols with the distances between each row provided in pwmat. The neighborhood is defined by the K closest neighbors
@@ -198,11 +198,17 @@ def neighborhood_tally(df_pop, pwmat, x_cols, df_centroids=None, count_col='coun
                 # print('Using K = %d (%1.0f%% of %d)' % (K, 100*frac, n))
             else:
                 K = int(knn_neighbors)
-            R = np.partition(pwmat[ii, :], K)[K]
+            if np.issparse(pwmat):
+                R = np.partition(pwmat[ii, :].data, K)[K]
+            else:
+                R = np.partition(pwmat[ii, :], K)[K]
         else:
             R = knn_radius
         y_lu = {True:'MEM+', False:'MEM-'}
-        y_float = (pwmat[ii, :] <= R).astype(float)
+
+        """Possible efficiency issue here for large sparse matrices since
+        a whole column of MEM+/MEM- labels is created"""
+        y_float = find_radius_members(ii, pwmat, radius=R)
         y = np.array([y_lu[yy] for yy in y_float])
         K = int(np.sum(y_float))
 
@@ -218,6 +224,24 @@ def neighborhood_tally(df_pop, pwmat, x_cols, df_centroids=None, count_col='coun
 
     res_df = pd.DataFrame(res)
     return res_df
+
+def find_radius_members(ii, pwmat, radius=12):
+    """Return a binary indicator vector of shape (pwmat.shape[1], ) and
+    dtype=float, with a 1 for every distance entry in the iith row
+    of the pwmat with D <= radius"""
+    if np.issparse(pwmat):
+        # SLOW
+        # row = np.asarray(pwmat[i, :].todense())
+        # row[row == 0] = radius + 1
+        # return np.nonzero(row <= radius)[1]
+        ind = np.nonzero(pwmat.data[S.indptr[i]:pwmat.indptr[i+1]] <= radius)[0]
+        col_indices = pwmat.indices[pwmat.indptr[i]:pwmat.indptr[i+1]][ind]
+        y_float = np.zeros(pwmat.shape[1], dtype=float)
+        y_float[col_indices] = 1
+    else:    
+        y_float = (pwmat[ii, :] <= radius).astype(float)
+    return y_float
+    
 
 def any_cluster_tally(df, cluster_df, x_cols, cluster_ind_col='neighbors', count_col='count'):
     """Tallies clones inside (outside) each cluster for testing enrichment of other categorical

@@ -7,6 +7,7 @@ import sys
 #import matplotlib as mpl
 from scipy.spatial import distance
 import scipy.cluster.hierarchy as sch
+import itertools
 
 import json
 
@@ -167,8 +168,7 @@ def _hclust_paths(Z, height, width, margin=10, res=None, alpha_col='pvalue', alp
                 L = (xx[2] - xx[1])
                 xvec = L * np.concatenate(([0.], obs, [1.]))
                 curX = xx[1]
-                for i in range(len(obs)):
-                    c = colors[i]
+                for i, c in zip(range(len(obs)), itertools.cycle(colors)):
                     lines.append(dict(x1=xscale(curX),
                                       x2=xscale(curX + L*obs[i]),
                                       y1=yscale(yy[1]),
