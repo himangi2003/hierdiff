@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import itertools
 import warnings
+import scipy.sparse
 
 import scipy.cluster.hierarchy as sch
 from scipy.spatial import distance
@@ -198,7 +199,7 @@ def neighborhood_tally(df_pop, pwmat, x_cols, df_centroids=None, count_col='coun
                 # print('Using K = %d (%1.0f%% of %d)' % (K, 100*frac, n))
             else:
                 K = int(knn_neighbors)
-            if np.issparse(pwmat):
+            if scipy.sparse.issparse(pwmat):
                 R = np.partition(pwmat[ii, :].data, K)[K]
             else:
                 R = np.partition(pwmat[ii, :], K)[K]
@@ -229,7 +230,7 @@ def find_radius_members(ii, pwmat, radius=12):
     """Return a binary indicator vector of shape (pwmat.shape[1], ) and
     dtype=float, with a 1 for every distance entry in the iith row
     of the pwmat with D <= radius"""
-    if np.issparse(pwmat):
+    if scipy.sparse.issparse(pwmat):
         # SLOW
         # row = np.asarray(pwmat[i, :].todense())
         # row[row == 0] = radius + 1
