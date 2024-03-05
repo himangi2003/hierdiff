@@ -94,7 +94,7 @@ def _prep_counts(cdf, xcols, ycol, count_col):
 
     Key "ct_columns" contains the xcols and ycol as a list
     Ket levels contains the levels of xcols and ycol as lists from a pd.Series.MultiIndex"""
-    counts = cdf.groupby(xcols + [ycol], sort=True)[count_col].agg(np.sum)
+    counts = cdf.groupby(xcols + [ycol], sort=True)[count_col].agg('sum')
     out = _counts_to_cols(counts)
     counts = _dict_to_nby2(out)
     out['levels'] = [list(lev) for lev in counts.index.levels]
@@ -277,7 +277,7 @@ def any_cluster_tally(df, cluster_df, x_cols, cluster_ind_col='neighbors', count
     res = []
     for cid, m in cluster_df[cluster_ind_col].values:
         not_m = [i for i in range(n) if not i in m]
-        y_float = np.zeros(n, dtype=np.int)
+        y_float = np.zeros(n, dtype=np.int64)
         y_float[m] = 1
 
         y_lu = {1:'MEM+', 0:'MEM-'}
@@ -404,7 +404,7 @@ def hcluster_tally(df, pwmat, x_cols, Z=None, count_col='count', subset_ind=None
 
     for cid, m in members.items():
         not_m = [i for i in range(n) if not i in m]
-        y_float = np.zeros(n, dtype=np.int)
+        y_float = np.zeros(n, dtype=np.int64)
         y_float[m] = 1
 
         y_lu = {1:'MEM+', 0:'MEM-'}
