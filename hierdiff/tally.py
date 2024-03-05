@@ -13,7 +13,8 @@ __all__ = ['hcluster_tally',
 		   'neighborhood_tally',
            'running_neighborhood_tally',
            'any_cluster_tally',
-           'find_radius_members']
+           'find_radius_members',
+           'unpack_counts']
 
 """TODO:
  * Incorporate running_neighbors into TCRdist, wrapping the standard metrics so they can work
@@ -21,6 +22,17 @@ __all__ = ['hcluster_tally',
  * Verify that running_neighbor uses all CPUs and less memory: see how it could be further optimized
    with joblib caching, expecially for the metrics that include the CDR2 and CDR1.5 etc.
 """
+
+def unpack_counts(row):
+    """Takes a row from a tally result and reformats the count columns
+    so they can be inspected visually or more accessible for analysis."""
+    names = row['ct_columns']
+    vcols = [c for c in row.index if 'val_' in c]
+    ctcols = [f'ct_{i}' for i in range(len(vcols))]
+    out = pd.DataFrame(row[ctcols].values,
+                        index=pd.MultiIndex.from_tuples(row[vcols], names=names))
+    out.columns = ['count']
+    return out['count']
 
 def _counts_to_cols(counts):
     """Encodes the counts Series as columns that can be added to a takky result row
@@ -96,7 +108,7 @@ def _prep_counts(cdf, xcols, ycol, count_col):
 
     Key "ct_columns" contains the xcols and ycol as a list
     Ket levels contains the levels of xcols and ycol as lists from a pd.Series.MultiIndex"""
-    counts = cdf.groupby(xcols + [ycol], sort=True)[count_col].agg(np.sum)
+    counts = cdf.groupby(xcols + [ycol], sort=True)[count_col].agg('sum')
     out = _counts_to_cols(counts)
     counts = _dict_to_nby2(out)
     out['levels'] = [list(lev) for lev in counts.index.levels]
@@ -333,7 +345,7 @@ def any_cluster_tally(df, cluster_df, x_cols, cluster_ind_col='neighbors', count
     res = []
     for cid, m in cluster_df[cluster_ind_col].values:
         not_m = [i for i in range(n) if not i in m]
-        y_float = np.zeros(n, dtype=np.int)
+        y_float = np.zeros(n, dtype=np.int64)
         y_float[m] = 1
 
         y_lu = {1:'MEM+', 0:'MEM-'}
@@ -460,7 +472,7 @@ def hcluster_tally(df, pwmat, x_cols, Z=None, count_col='count', subset_ind=None
 
     for cid, m in members.items():
         not_m = [i for i in range(n) if not i in m]
-        y_float = np.zeros(n, dtype=np.int)
+        y_float = np.zeros(n, dtype=np.int64)
         y_float[m] = 1
 
         y_lu = {1:'MEM+', 0:'MEM-'}

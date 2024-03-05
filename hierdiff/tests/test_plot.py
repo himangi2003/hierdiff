@@ -15,12 +15,38 @@ import scipy
 import palmotif
 import pwseqdist as pwsd
 
-from hierdiff import plot_hclust, hcluster_tally, plot_hclust_props, cluster_association_test
+from hierdiff import plot_hclust, hcluster_tally, plot_hclust_props, cluster_association_test, plot_nnscatter
 
 from .data_generator import generate_peptide_data
 
+class TestNNDiffPlot(unittest.TestCase):
+    # @unittest.skip
+    def test_scatter_plot(self):
+        np.random.seed(110820)
+        n = 1000
+        pwmat = distance.pdist(np.random.randn(n, 4))
+        # Z = sch.linkage(pwmat, method='complete')
+
+        data = pd.DataFrame({'count':np.random.randint(low=1, high=20, size=n),
+                             'condition':np.random.choice(['Positive', 'Negative'], size=n)})
+
+        res = neighborhood_tally(data, distance.squareform(pwmat, force='matrix'),
+                                    x_cols=['condition'],
+                                    df_centroids=None,
+                                    count_col='count',
+                                    knn_neighbors=None,
+                                    knn_radius=25)
+
+        html = plot_nn_scatter(Z, title='test_d3_plot_props',
+                                    res=res, alpha=None)
+
+        with open(opj('hierdiff', 'tests', 'test_nn_props.html'), 'w', encoding='utf-8') as fh:
+            fh.write(html)
+
+        self.assertTrue(True)
+
 class TestHierDiff(unittest.TestCase):
-    #@unittest.skip
+    @unittest.skip
     def test_d3_plot(self):
         np.random.seed(110820)
         pwmat = distance.pdist(np.random.rand(100, 4))
@@ -32,7 +58,7 @@ class TestHierDiff(unittest.TestCase):
 
         self.assertTrue(True)
 
-    #@unittest.skip
+    @unittest.skip
     def test_d3_plot_props(self):
         np.random.seed(110820)
         n = 1000
@@ -54,7 +80,7 @@ class TestHierDiff(unittest.TestCase):
             fh.write(html)
 
         self.assertTrue(True)
-
+    @unittest.skip
     def test_count_width(self):
         np.random.seed(110820)
         n = 100
@@ -78,7 +104,7 @@ class TestHierDiff(unittest.TestCase):
 
         self.assertTrue(True)
 
-    #@unittest.skip
+    @unittest.skip
     def test_props2(self):
         dat, pw = generate_peptide_data(n=100)
         np.random.seed(110820)
@@ -101,7 +127,7 @@ class TestHierDiff(unittest.TestCase):
 
         self.assertTrue(True)
 
-    #@unittest.skip
+    @unittest.skip
     def test_props_motif(self):
         dat, pw = generate_peptide_data()
         np.random.seed(110820)

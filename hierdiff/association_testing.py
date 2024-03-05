@@ -6,7 +6,7 @@ import warnings
 from functools import partial
 
 import statsmodels.api as sm
-# import patsy
+import patsy
 
 from scipy.stats import chi2_contingency
 from scipy.stats.contingency import expected_freq
@@ -18,7 +18,7 @@ from .tally import _dict_to_nby2
 
 __all__ = ['cluster_association_test']
 
-def cluster_association_test(res, y_col='cmember', method='fishers'):
+def cluster_association_test(res, y_col='cmember', method='fishers', **kwargs):
     """Use output of cluster tallies to test for enrichment of traits within a cluster.
 
     Use Fisher's exact test (test='fishers') to detect enrichment/association of the neighborhood
@@ -80,7 +80,6 @@ def cluster_association_test(res, y_col='cmember', method='fishers'):
                 res = res.assign(**tmp)                
                 
             elif method in ['chm', 'cmh']:
-                """Need to figure out how to efficiently refactor this test that wants the counts gby from tally"""
                 tmp = []
                 for i in range(res.shape[0]):
                     counts = _dict_to_nby2(res[ct_cols + val_cols + ['ct_columns', 'levels']].iloc[i].to_dict())
@@ -96,7 +95,20 @@ def cluster_association_test(res, y_col='cmember', method='fishers'):
 
                     tmp.append(_CMH_NBR(tables))
                 tmp = pd.DataFrame(tmp)
-                res = pd.concat((res, tmp), axis=1)              
+                res = pd.concat((res, tmp), axis=1)
+            elif method in ['logistic', 'glm']:
+                tmp = []
+                for i in range(res.shape[0]):
+                    cts = unpack_counts(res.iloc[i])
+                    cts = cts.unstack(y_col)
+                    #cts.loc[:, '_freq_col'] = cts['MEM+'] + cts['MEM-']
+                    #x_cols = res['ct_columns'].iloc[i][:-1]
+                    tmp.append(_glmCatNBR(cts.reset_index(),
+                                          x_cols=x_cols,
+                                          y_cols=['MEM+', 'MEM-']))
+                tmp = pd.DataFrame(tmp)
+                res = pd.concat((res, tmp), axis=1)
+
 
     for c in [c for c in res.columns if 'pvalue' in c]:
         res = res.assign(**{c.replace('pvalue', 'FWERp'):adjustnonnan(res[c].values, method='holm'),
@@ -135,6 +147,9 @@ def _CMH_NBR(tables, continuity_correction=True):
     and the first x_col as the other variable (requires that x_cols[0] is binary).
     Each table in the set is from a different strata defined by the categorical
     variables in x_cols[1:]. This test only applies to tests of more than one variable.
+    
+    Helpful discussion
+    https://stats.stackexchange.com/questions/88315/how-to-interpret-cochran-mantel-haenszel-test
 
     Parameters
     ----------
@@ -198,8 +213,8 @@ def _fisherNBR(res_df, ct_cols):
 
     RR = (a / (a + c)) / (b / (b + d))
     return {'RR':RR, 'OR':OR, 'pvalue':p}
-'''
-def _glmCatNBR(df, x_cols, y_col='NBR', count_col=None, l2_alpha=0, nperms=100):
+
+def _glmCatNBR(df, y_cols, x_cols, l2_alpha=0, nperms=100):
     """Applies a logisitic regression with cluster membership as the outcome and
     other variables in x_cols as predictors. The major advantage of this method
     is the ability to test for multiple associations simultaneously while adjusting
@@ -238,23 +253,31 @@ def _glmCatNBR(df, x_cols, y_col='NBR', count_col=None, l2_alpha=0, nperms=100):
     -------
     out : dict
         A dict of numpy vectors, one value per parameter providing: OR, coef, pvalue"""
-    if count_col is None:
-        freq_weights = None
-    else:
-        freq_weights = df[count_col]
 
     formula = ' + '.join(['C(%s)' % c for c in x_cols])
     X = patsy.dmatrix(formula, df, return_type='dataframe')
-    glmParams = dict(exog=X,
-                     family=sm.families.Binomial(link=sm.families.links.logit),
-                     freq_weights=freq_weights,
-                     hasconst=True)
-    mod = sm.GLM(endog=df[y_col].values, **glmParams)
+    mod = sm.GLM(endog=df[y_cols].values.astype(float),
+                 exog=X,
+                 family=sm.families.Binomial(),
+                 hasconst=True)
+
+    """experimenting with a GEE for models with repeated observations Maybe try a MEM instead
+    formula = ' + '.join(['C(%s)' % c for c in x_cols[:1]])
+    X = patsy.dmatrix(formula, df, return_type='dataframe')
+    mod = sm.GEE(endog=df[y_cols].values.astype(float),
+                 exog=X['C(Timepoint)[T.Pre]'].values[:, None],
+                 groups=df['ptid'].values,
+                 family=sm.families.Binomial(),
+                 hasconst=False)
+    """
+
     if l2_alpha == 0:
         res = mod.fit()
         out = {'%s_pvalue' % c:res.pvalues[c] for c in X.columns if not 'Intercept' in c}
     else:
         res = mod.fit_regularized(L1_wt=0, alpha=l2_alpha)
+        """THIS PERMUTATION TEST WOULD ONLY WORK IF THE DF CONTAINED CELL LEVEL DATA,
+        NOT AGGREGATED COUNTS
         rparams = np.zeros((len(res.params), nperms))
         for permi in range(nperms):
             randy = df[y_col].sample(frac=1, replace=False).values
@@ -263,8 +286,8 @@ def _glmCatNBR(df, x_cols, y_col='NBR', count_col=None, l2_alpha=0, nperms=100):
 
         perm_values = ((np.abs(res.params[:, None]) < np.abs(rparams)).sum(axis=1) + 1) / (nperms + 1)
         out = {'%s_pvalue' % c:v for c,v in zip(X.columns, perm_values) if not 'Intercept' in c}
+        """
 
     out.update({'%s_coef' % c:res.params[c] for c in X.columns if not 'Intercept' in c})
     out.update({'%s_OR' % c:np.exp(res.params[c]) for c in X.columns if not 'Intercept' in c})
     return out
-'''

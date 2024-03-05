@@ -1,5 +1,5 @@
 from .hier_plot import plot_hclust, plot_hclust_props
-from .tally import hcluster_tally, neighborhood_tally, running_neighborhood_tally, find_radius_members
+from .tally import hcluster_tally, neighborhood_tally, running_neighborhood_tally, find_radius_members, unpack_counts
 from .association_testing import cluster_association_test
 
 __all__ = ['hcluster_tally',
