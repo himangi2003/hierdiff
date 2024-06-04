@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import itertools
 import warnings
+from scipy import sparse
 
 import scipy.cluster.hierarchy as sch
 from scipy.spatial import distance
@@ -138,7 +139,7 @@ def neighborhood_tally(df_pop, pwmat, x_cols, df_centroids=None, count_col='coun
     ------
     df_pop : pd.DataFrame [nclones x metadata]
         Contains metadata for each clone in the population to be tallied.
-    pwmat : np.ndarray [df_centroids.shape[0] x df_pop.shape[0]]
+    pwmat : np.ndarray [df_centroids.shape[0] x df_pop.shape[0]] or sparse csr matrix format
         Pairwise distance matrix for defining neighborhoods.
         Number of rows in pwmat must match the number of rows in df_centroids,
         which may be the number of rows in df_pop if df_centroids=None
@@ -188,9 +189,19 @@ def neighborhood_tally(df_pop, pwmat, x_cols, df_centroids=None, count_col='coun
         count_col = 'count'
 
     ycol = 'cmember'
-        
+	
+	if sparse.issparse(pwmat):
+    	pwmat_coo = pwmat.tocoo()
+	
     res = []
     for ii in range(df_centroids.shape[0]):
+		if sparse.issparse(pwmat):
+			row = np.zeros(pwmat.shape[1])
+			row_inds = pwmat_coo.row == ii
+			row[pwmat_coo.col[row_inds]] = pwmat_coo.data[row_inds]
+		else:
+			row = pwmat[ii, :]
+		
         if not knn_neighbors is None:
             if knn_neighbors < 1:
                 frac = knn_neighbors
@@ -198,11 +209,11 @@ def neighborhood_tally(df_pop, pwmat, x_cols, df_centroids=None, count_col='coun
                 # print('Using K = %d (%1.0f%% of %d)' % (K, 100*frac, n))
             else:
                 K = int(knn_neighbors)
-            R = np.partition(pwmat[ii, :], K)[K]
+            R = np.partition(row, K)[K]
         else:
             R = knn_radius
         y_lu = {True:'MEM+', False:'MEM-'}
-        y_float = (pwmat[ii, :] <= R).astype(float)
+        y_float = (row <= R).astype(float)
         y = np.array([y_lu[yy] for yy in y_float])
         K = int(np.sum(y_float))
 
